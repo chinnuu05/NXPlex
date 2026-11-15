@@ -7,6 +7,7 @@
 #include <mutex>
 #include <vector>
 
+#include "nxplex_ipc.h"
 #include "platform.hpp"
 #include "player.hpp"
 
@@ -63,12 +64,31 @@ public:
         }
         last_w_ = w;
         last_h_ = h;
+        frame_seq_++;
         if (!window_ok_) return;
         if (w != fb_w_ || h != fb_h_) {
             if (!make_fb_locked(w, h)) return;
             apply_rect_locked();  // aspect ratio may have changed
         }
         draw_locked();
+    }
+
+    // Copies the latest frame for the overlay's preview. Pixels are only
+    // copied when the frame changed since `have_seq`.
+    size_t copy_frame(uint32_t have_seq, void* out, size_t size) {
+        std::lock_guard<std::mutex> lk(mu_);
+        if (size < sizeof(NxpFrameHeader)) return 0;
+        NxpFrameHeader hdr = {};
+        size_t px = (size_t)last_w_ * last_h_ * 2;
+        bool fits = !last_.empty() && last_w_ <= NXP_FRAME_MAX_W && last_h_ <= NXP_FRAME_MAX_H &&
+                    sizeof(hdr) + px <= size;
+        hdr.seq = fits ? frame_seq_ : 0;
+        hdr.width = (uint16_t)last_w_;
+        hdr.height = (uint16_t)last_h_;
+        hdr.has_pixels = fits && frame_seq_ != have_seq;
+        memcpy(out, &hdr, sizeof(hdr));
+        if (hdr.has_pixels) memcpy((uint8_t*)out + sizeof(hdr), last_.data(), px);
+        return sizeof(hdr) + (hdr.has_pixels ? px : 0);
     }
 
     // OSD state, drawn over the video.
@@ -244,6 +264,7 @@ private:
     float progress_ = -1, volume_ = 1;
     uint64_t progress_until_ = 0, volume_until_ = 0;
     std::vector<uint16_t> last_;
+    uint32_t frame_seq_ = 0;
 };
 
 // ------------------------------------------------------------------ audio

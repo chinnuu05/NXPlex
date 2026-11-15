@@ -49,9 +49,9 @@ service*), so it doesn't use memory when you're not watching.
 Open Tesla again any time for the **Now playing** controls: a position
 slider (hold Left/Right or drag; it jumps when you let go), pause, skip,
 next episode, volume, window position and size, stop. *Settings* has video
-quality and *Autoplay next episode* (on by default). While Tesla is open the video
-window steps aside (audio keeps playing) and comes back when Tesla closes;
-see [Limitations](#limitations).
+quality and *Autoplay next episode* (on by default). The corner window steps
+aside while Tesla is open (audio keeps playing), but **Now playing shows a live
+preview of the video**, so you can watch where you're seeking.
 
 ### Shortcuts (optional)
 
@@ -101,8 +101,10 @@ so the streaming code is tested end to end on a PC against a real server
 
 ## Limitations
 
-- **The video hides while Tesla is open.** The display shows only one of the
-  two overlay layers; with both present, Tesla opens invisibly. NXPlex infers
+- **The corner window hides while Tesla is open.** The display shows only one
+  of the two overlay layers; with both present, Tesla opens invisibly. Inside
+  NXPlex's own screen the video is shown as a live preview instead (the
+  sysmodule hands the latest frame to the overlay, `NxpCmd_GetFrame`). NXPlex infers
   Tesla's state from its combo (read from `config/tesla/config.ini`), B/A on the
   Tesla menu, and the NXPlex overlay itself. If it ever gets out of sync, press
   the Tesla combo twice. Transitions are logged as `tesla: ... -> ...`.

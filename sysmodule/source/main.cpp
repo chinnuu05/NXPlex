@@ -363,6 +363,10 @@ static Result handle(const IpcRequest& r, u8* out, size_t& out_size) {
         if (!in_val(r, u)) return kBad;
         g_app->cmd_set_autoplay(u != 0);
         return 0;
+    case NxpCmd_GetFrame:
+        if (!in_val(r, u) || !r.out_buf) return kBad;
+        g_display.copy_frame(u, r.out_buf, r.out_buf_size);
+        return 0;
     case NxpCmd_Quit: g_app->cmd_quit(); return 0;
     }
     return MAKERESULT(Module_Libnx, LibnxError_NotFound);

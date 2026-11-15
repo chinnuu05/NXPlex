@@ -89,6 +89,40 @@ static void play(const std::string& key, bool from_start) {
     put(NxpCmd_Play, &a, sizeof(a));
 }
 
+// ---- video preview (the PiP window is hidden while Tesla is open)
+
+static std::vector<u8> g_frame_buf;
+static std::vector<u16> g_frame;  // RGB565
+static u32 g_frame_seq = 0;
+static u16 g_frame_w = 0, g_frame_h = 0;
+
+// Returns true when a new frame arrived. Failures don't drop the connection
+// (an older service doesn't know this command).
+static bool fetch_frame() {
+    if (!g_connected) return false;
+    if (g_frame_buf.empty()) g_frame_buf.resize(sizeof(NxpFrameHeader) + NXP_FRAME_MAX_W * NXP_FRAME_MAX_H * 2);
+    u32 have = g_frame_seq;
+    Result rc = serviceDispatchIn(&g_srv, NxpCmd_GetFrame, have,
+                                  .buffer_attrs = {SfBufferAttr_HipcMapAlias | SfBufferAttr_Out},
+                                  .buffers = {{g_frame_buf.data(), g_frame_buf.size()}});
+    if (R_FAILED(rc)) return false;
+    NxpFrameHeader hdr;
+    memcpy(&hdr, g_frame_buf.data(), sizeof(hdr));
+    if (hdr.seq == 0) {  // nothing to show (yet)
+        g_frame_seq = 0;
+        g_frame.clear();
+        return false;
+    }
+    if (!hdr.has_pixels) return false;
+    size_t n = (size_t)hdr.width * hdr.height;
+    g_frame.resize(n);
+    memcpy(g_frame.data(), g_frame_buf.data() + sizeof(hdr), n * 2);
+    g_frame_w = hdr.width;
+    g_frame_h = hdr.height;
+    g_frame_seq = hdr.seq;
+    return true;
+}
+
 // ---- sysmodule lifecycle
 
 static bool sysmodule_running() {
@@ -388,6 +422,10 @@ public:
         bool episode = remote::g_have_status && remote::g_status.is_episode;
         if (shape != shape_ || (shape == Shape::Playing && episode != built_episode_)) build(shape);
         refresh();
+        if (shape_ == Shape::Playing && remote::now_ms() >= next_frame_at_) {
+            next_frame_at_ = remote::now_ms() + 33;  // up to ~30 fps; the video is 24
+            remote::fetch_frame();
+        }
         if (pending_seek_pct_ >= 0 && remote::now_ms() >= seek_send_at_) {
             u32 dur = remote::g_status.duration_ms;
             if (dur) remote::cmd_in<u32>(NxpCmd_SeekAbsolute, (u32)((u64)dur * (u32)pending_seek_pct_ / 100));
@@ -467,7 +505,11 @@ private:
             add("Choose your Plex server", "", [] { tsl::changeTo<GuiServers>(); });
             break;
         case Shape::Playing:
-            list_->addItem(new tsl::elm::CategoryHeader("Now playing  (video reappears when Tesla closes)"));
+            list_->addItem(new tsl::elm::CategoryHeader("Now playing"));
+            list_->addItem(new tsl::elm::CustomDrawer([this](tsl::gfx::Renderer* r, s32 x, s32 y, s32 w, s32 h) {
+                               draw_preview(r, x, y, w, h);
+                           }),
+                           kPreviewHeight);
             title_ = add(st.title, "", nullptr);
             sub_ = add(st.subtitle, "", nullptr);
             // Position slider: hold Left/Right (or drag on the touchscreen);
@@ -526,6 +568,48 @@ private:
             break;
         }
         restoreFocus();
+    }
+
+    static const u16 kPreviewHeight = 220;
+
+    // Live video inside the menu: scaled (nearest) and converted to Tesla's
+    // RGBA4444 once per new frame, then blitted every frame.
+    void draw_preview(tsl::gfx::Renderer* r, s32 x, s32 y, s32 w, s32 h) {
+        s32 bh = h - 10, bw = bh * 16 / 9;
+        if (bw > w - 10) {
+            bw = w - 10;
+            bh = bw * 9 / 16;
+        }
+        s32 bx = x + (w - bw) / 2, by = y + 5;
+        r->drawRect(bx, by, bw, bh, tsl::Color{0x0, 0x0, 0x0, 0xF});
+        const auto& f = remote::g_frame;
+        if (f.empty() || !remote::g_frame_w || !remote::g_frame_h) {
+            r->drawString("Waiting for video...", false, bx + 20, by + bh / 2 + 8, 20,
+                          r->a(tsl::style::color::ColorDescription));
+            return;
+        }
+        s32 fw = remote::g_frame_w, fh = remote::g_frame_h, dw = bw, dh = bh;
+        if (fw * bh > fh * bw) dh = bw * fh / fw;  // letterbox
+        else dw = bh * fw / fh;                    // pillarbox (e.g. 4:3)
+        if (cache_seq_ != remote::g_frame_seq || cache_w_ != dw || cache_h_ != dh) {
+            cache_.resize((size_t)dw * dh);
+            for (s32 j = 0; j < dh; j++) {
+                const u16* src = f.data() + (size_t)(j * fh / dh) * fw;
+                u16* dst = cache_.data() + (size_t)j * dw;
+                for (s32 i = 0; i < dw; i++) {
+                    u16 p = src[i * fw / dw];  // RGB565 -> Tesla RGBA4444 (r low nibble, a high)
+                    dst[i] = (u16)((p >> 12) | (((p >> 7) & 0xF) << 4) | (((p >> 1) & 0xF) << 8) | 0xF000);
+                }
+            }
+            cache_seq_ = remote::g_frame_seq;
+            cache_w_ = dw;
+            cache_h_ = dh;
+        }
+        s32 ox = bx + (bw - dw) / 2, oy = by + (bh - dh) / 2;
+        for (s32 j = 0; j < dh; j++) {
+            const u16* row = cache_.data() + (size_t)j * dw;
+            for (s32 i = 0; i < dw; i++) r->setPixel(ox + i, oy + j, tsl::Color(row[i]));
+        }
     }
 
     // Updates texts in place (no rebuild).
@@ -591,6 +675,10 @@ private:
     bool built_episode_ = false;
     tsl::elm::TrackBar* volume_ = nullptr;
     tsl::elm::TrackBar* seek_ = nullptr;
+    std::vector<u16> cache_;  // preview in Tesla's RGBA4444
+    u32 cache_seq_ = 0;
+    s32 cache_w_ = 0, cache_h_ = 0;
+    u64 next_frame_at_ = 0;
     tsl::elm::CategoryHeader* pos_header_ = nullptr;
     int pending_seek_pct_ = -1;
     u64 seek_send_at_ = 0, seek_hold_until_ = 0;

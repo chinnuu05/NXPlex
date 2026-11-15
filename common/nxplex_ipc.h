@@ -11,7 +11,7 @@
 extern "C" {
 #endif
 
-#define NXP_API_VERSION 2
+#define NXP_API_VERSION 3
 #define NXP_PORT_NAME "nxplex"
 #define NXP_SYSMODULE_TID 0x4200000000504C58ULL /* "PLX" */
 
@@ -95,6 +95,18 @@ typedef struct {
     NxpServerInfo servers[NXP_MAX_SERVERS];
 } NxpServers;
 
+/* Latest video frame, for the preview inside the Tesla overlay (the PiP
+ * window itself can't be shown while Tesla is open). Pixels follow the
+ * header only when seq differs from the one the client passed in. */
+#define NXP_FRAME_MAX_W 512
+#define NXP_FRAME_MAX_H 288
+typedef struct {
+    uint32_t seq;  /* 0 = no frame */
+    uint16_t width, height;
+    uint8_t has_pixels;
+    uint8_t pad[7];
+} NxpFrameHeader;
+
 typedef struct {
     char key[112]; /* item path, e.g. /library/metadata/123 */
     uint8_t from_start;
@@ -130,6 +142,7 @@ enum NxpCmd {
     NxpCmd_UiState = 30,       /* in: u32 NxpUi* (overlay shown/hidden/closing) */
     NxpCmd_NextEpisode = 31,
     NxpCmd_SetAutoplay = 32,   /* in: u32 0/1 */
+    NxpCmd_GetFrame = 33,      /* in: u32 last seq; out buf: NxpFrameHeader + RGB565 pixels */
 
     NxpCmd_Quit = 50,
 };
