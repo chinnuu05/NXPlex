@@ -13,6 +13,7 @@
 #include "app.hpp"
 #include "platform.hpp"
 #include "sim.hpp"
+#include "testguard.hpp"
 
 using namespace nxp;
 
@@ -71,6 +72,10 @@ int main(int argc, char** argv) {
     client.device = "PC";
     client.device_name = "NXPlex apptest";
 
+    {
+        PlexServerSession ss{cfg.get("server_url"), cfg.get("server_token")};
+        if (!safe_to_test(client, ss)) return 2;
+    }
     SimAudio audio;
     SimVideo video;
     int volume_seen = -1;
@@ -167,6 +172,29 @@ int main(int argc, char** argv) {
           "quality 480p");
     sleep_ms(2500);
     CHECK(video.h == 480 && video.shown > 0, "480p frames: %dx%d", video.w, video.h);
+    // Auto: quality follows the window size once it settles, +1 step docked.
+    NxpStatus before_auto = status();
+    app.cmd_set_quality(NXP_QUALITY_AUTO);  // applies the current size's quality right away
+    wait_for("auto applied", 15000, [](const NxpStatus& s) { return s.play_state == NxpPlay_Playing; });
+    int auto_now = status().quality;
+    CHECK(auto_now == before_auto.size, "switching to Auto picks the window's quality (%d for size %d)", auto_now,
+          before_auto.size);
+    app.cmd_set_layout(before_auto.corner, 3);  // Extra large -> 360p, but only once the size settles
+    sleep_ms(600);
+    CHECK(status().quality == auto_now, "auto waits for the size to settle (still %d)", status().quality);
+    CHECK(wait_for("auto 360p", 15000,
+                   [](const NxpStatus& s) {
+                       return s.quality_auto && s.quality == 3 && s.play_state == NxpPlay_Playing;
+                   }),
+          "auto: Extra large -> 360p");
+    sleep_ms(2500);
+    CHECK(video.h == 360, "360p frames: %dx%d", video.w, video.h);
+    app.cmd_set_docked(true);  // TV: one step up
+    CHECK(wait_for("auto docked", 15000,
+                   [](const NxpStatus& s) { return s.quality == 4 && s.play_state == NxpPlay_Playing; }),
+          "auto: docked -> 480p");
+    app.cmd_set_docked(false);
+    app.cmd_set_layout(before_auto.corner, before_auto.size);  // back to the size we had
     app.cmd_set_quality(1);
     app.cmd_set_volume(70);
     CHECK(volume_seen == 70, "volume hook");

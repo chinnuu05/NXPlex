@@ -12,7 +12,8 @@ keeps the controller; you control playback from the Tesla overlay menu.
 - **Autoplay**: when an episode ends, the next one starts (next season too); can be turned off
 - **Next episode** button while watching a show
 - Position slider with a live preview to jump anywhere, plus pause, skip ±10/30 s, volume,
-  window corner, five window sizes (small to two-thirds of the screen) and video quality (144p up to 480p)
+  window corner, five window sizes (small to two-thirds of the screen) and video quality
+  (**Auto** picks it from the window size, one step higher when docked; or 144p up to 480p)
 - Keeps playing while you open Tesla or other overlays
 - Optional controller shortcuts so you don't even need to open the menu
 
@@ -156,7 +157,8 @@ host/avtest file.mkv 10     # play a file through the player with a simulated au
 ```
 
 `apptest` plays the first *Continue Watching* item and restores its resume
-point afterwards.
+point afterwards. Both end-to-end tests refuse to run while anything is playing
+on the server, so they can't fight with real viewing.
 
 ## Project layout
 

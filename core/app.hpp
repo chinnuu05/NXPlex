@@ -60,7 +60,8 @@ public:
     void cmd_set_autoplay(bool on);
     void cmd_set_volume(int v);
     void cmd_set_layout(int corner, int size);
-    void cmd_set_quality(int q);
+    void cmd_set_quality(int q);  // 0..4, or NXP_QUALITY_AUTO
+    void cmd_set_docked(bool docked);  // platform reports TV/handheld (Auto quality)
     void cmd_quit();
 
     // ---- display thread
@@ -93,7 +94,11 @@ private:
 
     bool open_stream(uint32_t offset_ms, std::string& err);
     void teardown_player();
-    void report_timeline(const char* state);
+    void report_timeline(const char* state, int64_t pos_ms = -1);  // pos_ms < 0: current position
+    // Ends the stream, then reports "stopped" at the position it had. In that
+    // order: when the transcode ends Plex may record the transcoder's own
+    // (far-ahead) position, and our report has to land after it.
+    void stop_and_report();
     void mark_watched();  // the current item played to the end
     uint32_t position_locked();  // needs play_mu_
     void set_error(const std::string& e);
@@ -143,6 +148,9 @@ private:
     std::string title_, subtitle_, error_;
     int volume_ = 100, corner_ = 0, size_ = 1, quality_ = 1;
     bool autoplay_ = true;
+    bool quality_auto_ = true, docked_ = false;
+    uint64_t auto_due_ms_ = 0;  // when to re-pick the Auto quality (debounced)
+    int auto_quality_locked() const;
     bool cfg_dirty_ = false;
     bool end_reported_ = false;
     uint64_t next_timeline_ms_ = 0;

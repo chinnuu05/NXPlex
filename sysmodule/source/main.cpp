@@ -77,11 +77,13 @@ void __appInit(void) {
     if (R_SUCCEEDED(timeInitialize())) __libnx_init_time();  // TLS certificate dates
     csrngInitialize();                                        // mbedTLS entropy
     hidInitialize();
+    apmInitialize();  // docked (Boost) vs handheld (Normal), for Auto quality
     socketInitialize(&kSocketConfig);
 }
 
 void __appExit(void) {
     socketExit();
+    apmExit();
     hidExit();
     csrngExit();
     timeExit();
@@ -196,11 +198,18 @@ static void display_thread(void*) {
     uint64_t loops = 0, loops_since = now_ms();  // diagnostics: detect busy loops
     TeslaWatcher tesla;
     tesla.load_combo();
+    uint64_t next_dock_check = 0;
 
     while (g_running) {
         padUpdate(&pad);
         u64 down = padGetButtonsDown(&pad), held = padGetButtons(&pad);
         g_display.set_hidden(tesla.update(down, held));
+
+        if (now_ms() >= next_dock_check) {
+            next_dock_check = now_ms() + 1000;
+            ApmPerformanceMode mode = ApmPerformanceMode_Normal;
+            if (R_SUCCEEDED(apmGetPerformanceMode(&mode))) g_app->cmd_set_docked(mode == ApmPerformanceMode_Boost);
+        }
 
         bool want = g_app->playing_or_loading();
         if (want) {

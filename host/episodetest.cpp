@@ -9,6 +9,7 @@
 #include "app.hpp"
 #include "platform.hpp"
 #include "sim.hpp"
+#include "testguard.hpp"
 
 using namespace nxp;
 
@@ -76,6 +77,7 @@ int main() {
     client.device = "PC";
     client.device_name = "NXPlex episodetest";
     PlexServerSession ss{cfg.get("server_url"), cfg.get("server_token")};
+    if (!safe_to_test(client, ss)) return 2;
 
     // ---- pick an episode with a next one, and remember both episodes' state
     PlexPage deck;

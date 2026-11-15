@@ -587,8 +587,11 @@ private:
             add("Continue Watching", "", [] { tsl::changeTo<GuiBrowse>("/library/onDeck", "Continue Watching"); });
             add("Libraries", "", [] { tsl::changeTo<GuiBrowse>("/library/sections", "Libraries"); });
             list_->addItem(new tsl::elm::CategoryHeader("Settings"));
+            // Auto -> 144p -> ... -> 480p -> Auto
             quality_ = add("Video quality", "", [] {
-                remote::cmd_in<u32>(NxpCmd_SetQuality, (u32)((remote::g_status.quality + 1) % 5));
+                const NxpStatus& q = remote::g_status;
+                u32 next = q.quality_auto ? 0u : (q.quality >= 4 ? (u32)NXP_QUALITY_AUTO : (u32)q.quality + 1);
+                remote::cmd_in<u32>(NxpCmd_SetQuality, next);
             });
             autoplay_ = add("Autoplay next episode", "", [] {
                 remote::cmd_in<u32>(NxpCmd_SetAutoplay, remote::g_status.autoplay ? 0u : 1u);
@@ -699,7 +702,9 @@ private:
         if (volume_ && pending_volume_ < 0 && getFocusedElement() != volume_) volume_->setProgress(st.volume);
         if (corner_) corner_->setValue(kCorners[st.corner & 3]);
         if (size_) size_->setValue(kSizes[st.size % 5]);
-        if (quality_) quality_->setValue(kQualities[st.quality % 5]);
+        if (quality_)
+            quality_->setValue(st.quality_auto ? std::string("Auto (") + kQualities[st.quality % 5] + ")"
+                                               : std::string(kQualities[st.quality % 5]));
         if (autoplay_) autoplay_->setValue(st.autoplay ? "On" : "Off");
         if (server_) server_->setValue(st.server_name);
         if (account_ && !signout_armed_) account_->setValue(st.account);

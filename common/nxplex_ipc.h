@@ -11,11 +11,12 @@
 extern "C" {
 #endif
 
-#define NXP_API_VERSION 4
+#define NXP_API_VERSION 5
 #define NXP_PORT_NAME "nxplex"
 #define NXP_SYSMODULE_TID 0x4200000000504C58ULL /* "PLX" */
 
 #define NXP_MAX_ITEMS 40 /* items per browse page */
+#define NXP_QUALITY_AUTO 5 /* SetQuality: pick from the window size */
 #define NXP_MAX_SERVERS 8
 
 enum NxpAuthState { NxpAuth_SignedOut = 0, NxpAuth_PinPending, NxpAuth_SignedIn };
@@ -35,11 +36,11 @@ typedef struct {
     uint8_t volume;        /* 0..100 */
     uint8_t corner;        /* 0=top right 1=top left 2=bottom left 3=bottom right */
     uint8_t size;          /* 0..4: small, medium (default), large, extra large, huge */
-    uint8_t quality;       /* 0..4: 144p, 216p (default), 288p, 360p, 480p */
+    uint8_t quality;       /* 0..4: 144p, 216p, 288p, 360p, 480p (the one in use, also in Auto) */
     uint8_t has_server;
     uint8_t is_episode;  /* the current item is a TV episode (Next episode applies) */
     uint8_t autoplay;    /* start the next episode when one finishes */
-    uint8_t pad;
+    uint8_t quality_auto; /* quality follows the window size (and docked mode) */
     uint32_t browse_seq;
     uint32_t position_ms;
     uint32_t duration_ms;
@@ -137,7 +138,7 @@ enum NxpCmd {
     NxpCmd_SeekAbsolute = 24,  /* in: u32 ms */
     NxpCmd_SetVolume = 25,     /* in: u32 0..100 */
     NxpCmd_SetLayout = 26,     /* in: u32 corner | size << 8 */
-    NxpCmd_SetQuality = 27,    /* in: u32 0..4 */
+    NxpCmd_SetQuality = 27,    /* in: u32 0..4, or NXP_QUALITY_AUTO */
     NxpCmd_PlayFile = 28,      /* in buf: path (debug: local MKV) */
     NxpCmd_UiState = 30,       /* in: u32 NxpUi* (overlay shown/hidden/closing) */
     NxpCmd_NextEpisode = 31,

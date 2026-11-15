@@ -30,10 +30,10 @@ nxplex-cli: cli.cpp $(CORE_OBJ) $(LIBS)
 avtest: avtest.cpp sim.hpp $(CORE_OBJ) $(LIBS)
 	$(CXX) $(CXXFLAGS) $(INC) avtest.cpp $(CORE_OBJ) $(LIBS) -lpthread -o $@
 
-apptest: apptest.cpp sim.hpp $(CORE_OBJ) $(LIBS)
+apptest: apptest.cpp sim.hpp testguard.hpp $(CORE_OBJ) $(LIBS)
 	$(CXX) $(CXXFLAGS) $(INC) apptest.cpp $(CORE_OBJ) $(LIBS) -lpthread -o $@
 
-episodetest: episodetest.cpp sim.hpp $(CORE_OBJ) $(LIBS)
+episodetest: episodetest.cpp sim.hpp testguard.hpp $(CORE_OBJ) $(LIBS)
 	$(CXX) $(CXXFLAGS) $(INC) episodetest.cpp $(CORE_OBJ) $(LIBS) -lpthread -o $@
 
 jpeg_test: tests/jpeg_test.cpp tests/odd420_jpeg.inc build/core/decoders.o

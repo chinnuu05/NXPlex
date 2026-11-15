@@ -99,6 +99,9 @@ App::App(Config& cfg, const PlexClient& client, AudioSink& audio, VideoSink& vid
     corner_ = clampi(atoi(cfg_.get("pip_corner", "0").c_str()), 0, 3);
     size_ = clampi(atoi(cfg_.get("pip_size", "1").c_str()), 0, 4);
     quality_ = clampi(atoi(cfg_.get("quality", "1").c_str()), 0, kQualities - 1);
+    // "quality_mode" is new: installs that only saved a quality start on Auto.
+    quality_auto_ = cfg_.get("quality_mode", "auto") != "manual";
+    if (quality_auto_) quality_ = auto_quality_locked();
     autoplay_ = cfg_.get("autoplay", "1") != "0";
 }
 
@@ -127,8 +130,7 @@ void App::stop() {
     }
     cv_.notify_all();
     worker_.join();
-    report_timeline("stopped");
-    teardown_player();
+    stop_and_report();
     std::lock_guard<std::mutex> lk(state_mu_);
     if (cfg_dirty_) save_config_locked();
 }
@@ -138,6 +140,7 @@ void App::save_config_locked() {
     cfg_.set("pip_corner", std::to_string(corner_));
     cfg_.set("pip_size", std::to_string(size_));
     cfg_.set("quality", std::to_string(quality_));
+    cfg_.set("quality_mode", quality_auto_ ? "auto" : "manual");
     cfg_.set("autoplay", autoplay_ ? "1" : "0");
     if (!cfg_.save()) logf("app: could not save %s", cfg_.path().c_str());
     cfg_dirty_ = false;
@@ -194,6 +197,7 @@ void App::get_status(NxpStatus& o) {
     o.has_server = cfg_.get("server_url").empty() ? 0 : 1;
     o.is_episode = item_.type == "episode" ? 1 : 0;
     o.autoplay = autoplay_ ? 1 : 0;
+    o.quality_auto = quality_auto_ ? 1 : 0;
     o.browse_seq = browse_->seq;
     o.position_ms = pending_seek_ms_ >= 0 ? (uint32_t)pending_seek_ms_ : pos;
     o.duration_ms = duration_ms_;
@@ -409,16 +413,27 @@ void App::cmd_set_layout(int corner, int size) {
         cfg_dirty_ = true;
     }
     if (hooks_.set_layout) hooks_.set_layout(corner, size);
+    std::lock_guard<std::mutex> lk(state_mu_);
+    // Re-pick the Auto quality once the size has stopped changing: each
+    // quality change restarts the stream, so don't do it on every step.
+    if (quality_auto_) auto_due_ms_ = now_ms() + 2000;
 }
+
+// Auto quality: the window size's matching quality (on the Switch's 720p
+// screen Small..Huge are ~256..853 px wide, i.e. 144p..480p), one step
+// higher when docked to a TV.
+int App::auto_quality_locked() const { return clampi(size_ + (docked_ ? 1 : 0), 0, kQualities - 1); }
 
 void App::cmd_set_quality(int q) {
     bool restart;
     {
         std::lock_guard<std::mutex> lk(state_mu_);
-        q = clampi(q, 0, kQualities - 1);
-        if (q == quality_) return;
-        quality_ = q;
+        quality_auto_ = q == NXP_QUALITY_AUTO;
+        int target = quality_auto_ ? auto_quality_locked() : clampi(q, 0, kQualities - 1);
+        auto_due_ms_ = 0;
         cfg_dirty_ = true;
+        if (target == quality_) return;
+        quality_ = target;
         restart = play_state_ != NxpPlay_Stopped;
     }
     bool file;
@@ -427,6 +442,15 @@ void App::cmd_set_quality(int q) {
         file = is_file_;
     }
     if (restart && !file) queue(Job::Restart);
+}
+
+void App::cmd_set_docked(bool docked) {
+    std::lock_guard<std::mutex> lk(state_mu_);
+    if (docked == docked_) return;
+    docked_ = docked;
+    logf("app: %s", docked ? "docked" : "handheld");
+    if (quality_auto_) auto_due_ms_ = now_ms() + 2000;
+    cv_.notify_all();
 }
 
 void App::cmd_quit() {
@@ -598,6 +622,30 @@ void App::periodic() {
         }
     }
 
+    // --- Auto quality: apply a new target once the window size settled.
+    bool requality = false;
+    {
+        std::lock_guard<std::mutex> lk(state_mu_);
+        if (quality_auto_ && auto_due_ms_ && now >= auto_due_ms_) {
+            auto_due_ms_ = 0;
+            int target = auto_quality_locked();
+            if (target != quality_) {
+                logf("app: auto quality %d -> %d", quality_, target);
+                quality_ = target;
+                cfg_dirty_ = true;
+                requality = play_state_ == NxpPlay_Playing || play_state_ == NxpPlay_Paused;
+            }
+        }
+    }
+    if (requality) {
+        bool file;
+        {
+            std::lock_guard<std::mutex> lk(play_mu_);
+            file = is_file_ || !player_;
+        }
+        if (!file) job_restart();
+    }
+
     // --- Plex timeline (resume position / watched state), every 10 s.
     bool report = false;
     const char* state = "playing";
@@ -615,13 +663,25 @@ void App::periodic() {
     if (cfg_dirty_) save_config_locked();
 }
 
-void App::report_timeline(const char* state) {
+void App::stop_and_report() {
+    uint32_t pos;
+    bool had_player;
+    {
+        std::lock_guard<std::mutex> lk(play_mu_);
+        had_player = player_ != nullptr;
+        pos = position_locked();
+    }
+    teardown_player();
+    if (had_player) report_timeline("stopped", pos);
+}
+
+void App::report_timeline(const char* state, int64_t pos_ms) {
     std::string rating_key, key;
     uint32_t pos, dur;
     {
         std::lock_guard<std::mutex> lk(play_mu_);
         if (is_file_ || (!player_ && strcmp(state, "stopped") != 0)) return;
-        pos = position_locked();
+        pos = pos_ms >= 0 ? (uint32_t)pos_ms : position_locked();
     }
     {
         std::lock_guard<std::mutex> lk(state_mu_);
@@ -833,8 +893,7 @@ void App::job_play() {
         key = play_key_;
         from_start = play_from_start_;
     }
-    report_timeline("stopped");
-    teardown_player();
+    stop_and_report();
 
     PlexServerSession s = session();
     PlexPage page;
@@ -867,6 +926,10 @@ void App::job_play() {
         }
         restarts_ = 0;
         stream_offset_ms_ = offset;
+        if (quality_auto_) {  // starting fresh: no need to wait for the debounce
+            quality_ = auto_quality_locked();
+            auto_due_ms_ = 0;
+        }
     }
     if (!open_stream(offset, err)) {
         std::lock_guard<std::mutex> lk(state_mu_);
@@ -885,8 +948,7 @@ void App::job_play_file() {
         std::lock_guard<std::mutex> lk(state_mu_);
         path = play_file_;
     }
-    report_timeline("stopped");
-    teardown_player();
+    stop_and_report();
     auto f = std::unique_ptr<FileSource>(new FileSource());
     std::string err;
     bool ok = f->open(path);
@@ -995,8 +1057,8 @@ void App::job_next(bool finished) {
         cur = item_;
     }
     if (cur.type != "episode") return;
-    // Report where we left this one (at the end: Plex marks it watched).
-    report_timeline("stopped");
+    // End this one and report where we left it.
+    stop_and_report();
     PlexItem next;
     std::string err;
     bool found = next_episode(server_cl_, session(), cur, next, err);
@@ -1020,8 +1082,8 @@ void App::job_next(bool finished) {
 }
 
 void App::job_stop(bool report, const char* reason) {
-    if (report) report_timeline("stopped");
-    teardown_player();
+    if (report) stop_and_report();
+    else teardown_player();
     {
         std::lock_guard<std::mutex> lk(play_mu_);
         stream_offset_ms_ = 0;
