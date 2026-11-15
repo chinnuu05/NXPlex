@@ -43,10 +43,19 @@ public:
         std::lock_guard<std::mutex> lk(mu_);
         return active_;
     }
+    // Hidden while Tesla is open (the display can't show both layers).
     void set_hidden(bool hidden) {
         std::lock_guard<std::mutex> lk(mu_);
         if (hidden == hidden_) return;
         hidden_ = hidden;
+        sync_locked();
+    }
+    // Hidden by the user (shortcut / menu) so it doesn't cover the game's HUD.
+    // The last frame is kept, so it comes back instantly.
+    void set_user_hidden(bool hidden) {
+        std::lock_guard<std::mutex> lk(mu_);
+        if (hidden == user_hidden_) return;
+        user_hidden_ = hidden;
         sync_locked();
     }
 
@@ -160,7 +169,7 @@ private:
     }
 
     void sync_locked() {
-        bool want = active_ && !hidden_;
+        bool want = active_ && !hidden_ && !user_hidden_;
         if (want && !layer_ok_) {
             if (create_layer_locked() && last_w_ > 0 && make_fb_locked(last_w_, last_h_)) {
                 apply_rect_locked();
@@ -294,7 +303,7 @@ private:
     ViLayer layer_ = {};
     NWindow window_ = {};
     Framebuffer fb_ = {};
-    bool active_ = false, hidden_ = false;
+    bool active_ = false, hidden_ = false, user_hidden_ = false;
     bool layer_ok_ = false, window_ok_ = false, fb_ok_ = false;
     int fb_w_ = 0, fb_h_ = 0, last_w_ = 0, last_h_ = 0;
     int corner_ = 0, size_ = 1;

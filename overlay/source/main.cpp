@@ -505,7 +505,7 @@ private:
         built_episode_ = remote::g_have_status && remote::g_status.is_episode;
         removeFocus();
         list_->clear();
-        status_ = title_ = sub_ = pause_ = corner_ = size_ = quality_ = account_ = server_ = autoplay_ = nullptr;
+        status_ = title_ = sub_ = pause_ = corner_ = size_ = quality_ = account_ = server_ = autoplay_ = pip_ = nullptr;
         volume_ = seek_ = nullptr;
         pos_header_ = nullptr;
         pending_seek_pct_ = -1;
@@ -572,6 +572,7 @@ private:
                 volume_send_at_ = remote::now_ms() + 120;  // send once the stick settles
             });
             list_->addItem(volume_);
+            pip_ = add("Video window", "", [] { remote::cmd_in<u32>(NxpCmd_SetPipHidden, 2); });
             corner_ = add("Window position", "", [] {
                 const NxpStatus& s = remote::g_status;
                 remote::cmd_in<u32>(NxpCmd_SetLayout, (u32)(((s.corner + 1) % 4) | (s.size << 8)));
@@ -700,6 +701,7 @@ private:
             }
         }
         if (volume_ && pending_volume_ < 0 && getFocusedElement() != volume_) volume_->setProgress(st.volume);
+        if (pip_) pip_->setValue(st.pip_hidden ? "Hidden" : "Shown");
         if (corner_) corner_->setValue(kCorners[st.corner & 3]);
         if (size_) size_->setValue(kSizes[st.size % 5]);
         if (quality_)
@@ -714,7 +716,7 @@ private:
     Shape shape_ = Shape::Connecting;
     tsl::elm::ListItem *status_ = nullptr, *title_ = nullptr, *sub_ = nullptr, *pause_ = nullptr;
     tsl::elm::ListItem *corner_ = nullptr, *size_ = nullptr, *quality_ = nullptr, *account_ = nullptr,
-                       *server_ = nullptr, *autoplay_ = nullptr;
+                       *server_ = nullptr, *autoplay_ = nullptr, *pip_ = nullptr;
     bool built_episode_ = false;
     tsl::elm::TrackBar* volume_ = nullptr;
     tsl::elm::TrackBar* seek_ = nullptr;

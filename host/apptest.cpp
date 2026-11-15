@@ -199,10 +199,20 @@ int main(int argc, char** argv) {
     app.cmd_set_volume(70);
     CHECK(volume_seen == 70, "volume hook");
 
+    // ---- hide / show the video window (shortcut L+R3+ZL, or the menu)
+    app.cmd_set_pip_hidden(2);
+    CHECK(status().pip_hidden == 1, "video window hidden");
+    sleep_ms(1500);
+    CHECK(status().play_state == NxpPlay_Playing, "still playing while hidden");
+    app.cmd_set_pip_hidden(2);
+    CHECK(status().pip_hidden == 0, "video window shown again");
+    app.cmd_set_pip_hidden(1);  // hidden when we stop: the next video should show up
+
     // ---- stop; Plex should now have a resume point near where we stopped
     uint32_t stop_at = status().position_ms;
     app.cmd_stop();
     CHECK(wait_for("stop", 10000, [](const NxpStatus& s) { return s.play_state == NxpPlay_Stopped; }), "stopped");
+    CHECK(status().pip_hidden == 0, "stopping un-hides the window for the next video");
     sleep_ms(1000);
     app.cmd_browse(key, 0);
     app.wait_idle(10000);

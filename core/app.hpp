@@ -60,6 +60,7 @@ public:
     void cmd_set_autoplay(bool on);
     void cmd_set_volume(int v);
     void cmd_set_layout(int corner, int size);
+    void cmd_set_pip_hidden(int mode);  // 0 show, 1 hide, 2 toggle; resets when playback stops
     void cmd_set_quality(int q);  // 0..4, or NXP_QUALITY_AUTO
     void cmd_set_docked(bool docked);  // platform reports TV/handheld (Auto quality)
     void cmd_quit();
@@ -149,6 +150,7 @@ private:
     int volume_ = 100, corner_ = 0, size_ = 1, quality_ = 1;
     bool autoplay_ = true;
     bool quality_auto_ = true, docked_ = false;
+    bool pip_hidden_ = false;
     uint64_t auto_due_ms_ = 0;  // when to re-pick the Auto quality (debounced)
     int auto_quality_locked() const;
     bool cfg_dirty_ = false;

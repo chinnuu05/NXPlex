@@ -11,7 +11,7 @@
 extern "C" {
 #endif
 
-#define NXP_API_VERSION 5
+#define NXP_API_VERSION 6
 #define NXP_PORT_NAME "nxplex"
 #define NXP_SYSMODULE_TID 0x4200000000504C58ULL /* "PLX" */
 
@@ -41,6 +41,8 @@ typedef struct {
     uint8_t is_episode;  /* the current item is a TV episode (Next episode applies) */
     uint8_t autoplay;    /* start the next episode when one finishes */
     uint8_t quality_auto; /* quality follows the window size (and docked mode) */
+    uint8_t pip_hidden;   /* video window hidden by the user (audio keeps playing) */
+    uint8_t pad2[3];
     uint32_t browse_seq;
     uint32_t position_ms;
     uint32_t duration_ms;
@@ -144,6 +146,7 @@ enum NxpCmd {
     NxpCmd_NextEpisode = 31,
     NxpCmd_SetAutoplay = 32,   /* in: u32 0/1 */
     NxpCmd_GetFrame = 33,      /* in: u32 last seq; out buf: NxpFrameHeader + RGB565 pixels */
+    NxpCmd_SetPipHidden = 34,  /* in: u32 0 show, 1 hide, 2 toggle */
 
     NxpCmd_Quit = 50,
 };

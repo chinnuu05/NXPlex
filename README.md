@@ -61,11 +61,11 @@ Without opening Tesla: hold **L + R3** (right stick pressed), then press:
 
 | Button | Action |
 |---|---|
+| ZL | Hide / show the video window (audio keeps playing) |
 | Minus | Stop the video |
 | D-pad Up | Pause / resume |
 | D-pad Left / Right | Back 10 s / forward 30 s |
 | ZR / R | Video volume up / down |
-| ZL | Move the window to the next corner |
 
 The game also sees these buttons, so use them at a calm moment.
 

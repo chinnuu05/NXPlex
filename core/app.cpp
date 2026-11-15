@@ -198,6 +198,7 @@ void App::get_status(NxpStatus& o) {
     o.is_episode = item_.type == "episode" ? 1 : 0;
     o.autoplay = autoplay_ ? 1 : 0;
     o.quality_auto = quality_auto_ ? 1 : 0;
+    o.pip_hidden = pip_hidden_ ? 1 : 0;
     o.browse_seq = browse_->seq;
     o.position_ms = pending_seek_ms_ >= 0 ? (uint32_t)pending_seek_ms_ : pos;
     o.duration_ms = duration_ms_;
@@ -417,6 +418,12 @@ void App::cmd_set_layout(int corner, int size) {
     // Re-pick the Auto quality once the size has stopped changing: each
     // quality change restarts the stream, so don't do it on every step.
     if (quality_auto_) auto_due_ms_ = now_ms() + 2000;
+}
+
+void App::cmd_set_pip_hidden(int mode) {
+    std::lock_guard<std::mutex> lk(state_mu_);
+    pip_hidden_ = mode == 2 ? !pip_hidden_ : mode == 1;
+    logf("app: video window %s", pip_hidden_ ? "hidden" : "shown");
 }
 
 // Auto quality: the window size's matching quality (on the Switch's 720p
@@ -1093,6 +1100,7 @@ void App::job_stop(bool report, const char* reason) {
     if (play_state_ != NxpPlay_Stopped) logf("app: playback %s", reason);
     play_state_ = NxpPlay_Stopped;
     pending_seek_ms_ = -1;
+    pip_hidden_ = false;  // the next video shows up again
     title_.clear();
     subtitle_.clear();
     duration_ms_ = 0;

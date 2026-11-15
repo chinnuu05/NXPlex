@@ -5,8 +5,8 @@
 // port (see common/nxplex_ipc.h).
 //
 // Shortcuts while a video plays (hold L + R3, then press):
-//   Minus stop, D-pad Up pause/resume, D-pad Left/Right -10 s/+30 s,
-//   ZR/R volume, ZL move window.
+//   ZL hide/show the video window, Minus stop, D-pad Up pause/resume,
+//   D-pad Left/Right -10 s/+30 s, ZR/R volume.
 // Only the D-pad counts (not stick directions): pressing R3 wobbles the right
 // stick, which used to fire stray "Up/Left/Right" presses.
 // (D-pad Down is left alone: L + Down + R3 opens Tesla.)
@@ -227,6 +227,7 @@ static void display_thread(void*) {
         g_app->get_status(st);
         if (st.duration_ms) g_display.set_progress((float)st.position_ms / (float)st.duration_ms);
         g_display.set_paused(st.play_state == NxpPlay_Paused);
+        g_display.set_user_hidden(st.pip_hidden != 0);
         g_display.tick_osd();
         loops++;
         if (now_ms() - loops_since >= 30000) {
@@ -270,7 +271,10 @@ static void display_thread(void*) {
                     g_app->cmd_set_volume(v);
                     g_display.flash_volume(v, 1500);
                 }
-                if (down & HidNpadButton_ZL) g_app->cmd_set_layout((st.corner + 1) % 4, st.size);
+                if (down & HidNpadButton_ZL) {
+                    g_app->cmd_set_pip_hidden(2);
+                    g_display.set_user_hidden(!st.pip_hidden);  // right away, not on the next loop
+                }
             }
         }
 
@@ -389,6 +393,10 @@ static Result handle(const IpcRequest& r, u8* out, size_t& out_size) {
     case NxpCmd_GetFrame:
         if (!in_val(r, u) || !r.out_buf) return kBad;
         g_display.copy_frame(u, r.out_buf, r.out_buf_size);
+        return 0;
+    case NxpCmd_SetPipHidden:
+        if (!in_val(r, u)) return kBad;
+        g_app->cmd_set_pip_hidden((int)u);
         return 0;
     case NxpCmd_Quit: g_app->cmd_quit(); return 0;
     }
