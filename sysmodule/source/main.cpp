@@ -4,12 +4,11 @@
 // or other overlays are open. Serves the overlay over the "nxplex" named
 // port (see common/nxplex_ipc.h).
 //
-// Shortcuts while a video plays (hold L + R3, then press):
-//   ZL hide/show the video window, Minus stop, D-pad Up pause/resume,
-//   D-pad Left/Right -10 s/+30 s, ZR/R volume.
-// Only the D-pad counts (not stick directions): pressing R3 wobbles the right
-// stick, which used to fire stray "Up/Left/Right" presses.
-// (D-pad Down is left alone: L + Down + R3 opens Tesla.)
+// Shortcuts while a video plays: hold L3 (left stick pressed), then press
+//   ZR hide/show the video window, R pause/resume, Y/A -10 s/+30 s,
+//   X/B volume up/down, Plus stop.
+// The left thumb is on L3, so every action button is on the right hand.
+
 #include <switch.h>
 
 #include <strings.h>
@@ -191,9 +190,9 @@ static void display_thread(void*) {
     PadState pad;
     padConfigureInput(8, HidNpadStyleSet_NpadStandard | HidNpadStyleTag_NpadSystemExt);
     padInitializeAny(&pad);
-    const u64 kMod = HidNpadButton_L | HidNpadButton_StickR;
-    const u64 kActions = HidNpadButton_Up | HidNpadButton_Left | HidNpadButton_Right | HidNpadButton_ZR |
-                         HidNpadButton_R | HidNpadButton_ZL | HidNpadButton_Minus;
+    const u64 kMod = HidNpadButton_StickL;
+    const u64 kActions = HidNpadButton_ZR | HidNpadButton_R | HidNpadButton_Y | HidNpadButton_A | HidNpadButton_X |
+                         HidNpadButton_B | HidNpadButton_Plus;
     uint64_t idle_since = 0;
     uint64_t loops = 0, loops_since = now_ms();  // diagnostics: detect busy loops
     TeslaWatcher tesla;
@@ -252,28 +251,28 @@ static void display_thread(void*) {
         // Controller shortcuts (only while something is playing).
         if (want && (held & kMod) == kMod && (down & kActions)) {
             g_last_activity = now_ms();
-            if (down & HidNpadButton_Minus) {
+            if (down & HidNpadButton_Plus) {
                 logf("shortcut: stop");
                 g_app->cmd_stop();
             } else {
-                if (down & HidNpadButton_Up) g_app->cmd_set_paused(2);
-                if (down & HidNpadButton_Left) {
+                if (down & HidNpadButton_ZR) {
+                    g_app->cmd_set_pip_hidden(2);
+                    g_display.set_user_hidden(!st.pip_hidden);  // right away, not on the next loop
+                }
+                if (down & HidNpadButton_R) g_app->cmd_set_paused(2);
+                if (down & HidNpadButton_Y) {
                     g_app->cmd_seek_relative(-10000);
                     g_display.flash_progress(2500);
                 }
-                if (down & HidNpadButton_Right) {
+                if (down & HidNpadButton_A) {
                     g_app->cmd_seek_relative(30000);
                     g_display.flash_progress(2500);
                 }
-                if (down & (HidNpadButton_ZR | HidNpadButton_R)) {
-                    int v = st.volume + ((down & HidNpadButton_ZR) ? 10 : -10);
+                if (down & (HidNpadButton_X | HidNpadButton_B)) {
+                    int v = st.volume + ((down & HidNpadButton_X) ? 10 : -10);
                     v = v < 0 ? 0 : (v > 100 ? 100 : v);
                     g_app->cmd_set_volume(v);
                     g_display.flash_volume(v, 1500);
-                }
-                if (down & HidNpadButton_ZL) {
-                    g_app->cmd_set_pip_hidden(2);
-                    g_display.set_user_hidden(!st.pip_hidden);  // right away, not on the next loop
                 }
             }
         }

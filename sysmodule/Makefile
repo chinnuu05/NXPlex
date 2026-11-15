@@ -26,7 +26,7 @@ LIBS      := -L$(PORTLIBS)/lib -L$(LIBNX)/lib -lmbedtls -lmbedx509 -lmbedcrypto 
 
 all: $(TARGET).nsp
 
-build/%.o: %.cpp $(wildcard ../core/*.hpp) $(wildcard source/*.hpp) ../common/nxplex_ipc.h
+build/%.o: %.cpp $(wildcard ../core/*.hpp) $(wildcard source/*.hpp) ../common/nxplex_ipc.h ../VERSION
 	@mkdir -p build
 	$(CXX) $(CXXFLAGS) -MMD -c $< -o $@
 

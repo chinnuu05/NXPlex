@@ -65,17 +65,18 @@ preview of the video**, so you can watch where you're seeking.
 
 ### Shortcuts (optional)
 
-Without opening Tesla: hold **L + R3** (right stick pressed), then press:
+Without opening Tesla: hold **L3** (press the left stick in), then press:
 
 | Button | Action |
 |---|---|
-| ZL | Hide / show the video window (audio keeps playing) |
-| Minus | Stop the video |
-| D-pad Up | Pause / resume |
-| D-pad Left / Right | Back 10 s / forward 30 s |
-| ZR / R | Video volume up / down |
+| ZR | Hide / show the video window (audio keeps playing) |
+| R | Pause / resume |
+| Y / A | Back 10 s / forward 30 s |
+| X / B | Video volume up / down |
+| + | Stop the video |
 
-The game also sees these buttons, so use them at a calm moment.
+The game also sees these buttons, so use them at a calm moment (and mind
+games where you hold L3 to sprint).
 
 ## How it works
 

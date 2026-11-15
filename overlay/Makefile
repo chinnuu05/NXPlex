@@ -34,7 +34,7 @@ build/%.o: %.cpp ../common/nxplex_ipc.h
 build/$(TARGET).elf: $(OBJS)
 	$(CXX) $(LDFLAGS) $(OBJS) $(LIBS) -o $@
 
-build/$(TARGET).nacp:
+build/$(TARGET).nacp: ../VERSION
 	@mkdir -p build
 	nacptool --create "$(APP_TITLE)" "$(APP_AUTHOR)" "$(APP_VERSION)" $@
 
