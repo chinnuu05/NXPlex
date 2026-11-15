@@ -1,0 +1,28 @@
+# build output
+build/
+*.elf
+*.nso
+*.nsp
+*.npdm
+*.nacp
+*.nro
+*.ovl
+*.map
+*.o
+*.d
+dist/
+
+# PC tools
+host/nxplex-cli
+host/avtest
+host/apptest
+host/json_test
+host/third_party/
+
+# never commit these: logs contain your server details, media is yours
+crash-logs-from-switch/
+logs/
+*.log
+*.mkv
+*.mp4
+nxplex.ini
