@@ -14,11 +14,14 @@ keeps the controller; you control playback from the Tesla overlay menu.
 - Position slider with a live preview to jump anywhere, plus pause, skip ±10/30 s, volume,
   window corner, five window sizes (small to two-thirds of the screen) and video quality
   (**Auto** picks it from the window size, one step higher when docked; or 144p up to 480p)
+- Hide the video window with a shortcut when it covers part of a game (audio keeps playing)
 - Keeps playing while you open Tesla or other overlays
 - Optional controller shortcuts so you don't even need to open the menu
 
 > NXPlex is an independent fan project. It is not affiliated with, endorsed by,
 > or sponsored by Plex, Inc. or Nintendo. "Plex" is a trademark of Plex, Inc.
+
+See [CHANGELOG.md](CHANGELOG.md) for what's new in each version.
 
 ## Requirements
 
@@ -50,8 +53,10 @@ service*), so it doesn't use memory when you're not watching.
 
 Open Tesla again any time for the **Now playing** controls: a position
 slider (hold Left/Right or drag; it jumps when you let go), pause, skip,
-next episode, volume, window position and size, stop. *Settings* has video
-quality and *Autoplay next episode* (on by default). The corner window steps
+next episode, volume, show/hide the video window, window position and size,
+stop. *Settings* has *Video quality* (**Auto** by default: it follows the
+window size, one step higher when docked) and *Autoplay next episode* (on by
+default). The corner window steps
 aside while Tesla is open (audio keeps playing), but **Now playing shows a live
 preview of the video**, so you can watch where you're seeking.
 
@@ -76,7 +81,7 @@ and the one CPU core games leave free. So the Plex server does all the work and
 sends a stream that is trivial to play:
 
 - **Matroska** container, **MJPEG** video (every frame is a small standalone
-  JPEG) and **MP3** stereo audio, about 0.5–1.5 Mbit/s.
+  JPEG, 144p to 480p) and **MP3** stereo audio, about 0.5–2.7 Mbit/s.
 - Requested from the universal transcoder (`/video/:/transcode/universal/decision`
   then `/start`, same query) with `X-Plex-Platform: Generic` and
   `X-Plex-Client-Profile-Extra: add-transcode-target(type=videoProfile&context=streaming&protocol=http&container=mkv&videoCodec=mjpeg&audioCodec=mp3)`.
