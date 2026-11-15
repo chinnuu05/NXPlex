@@ -33,4 +33,4 @@ jobs:
       - name: Build PC tools and run unit tests
         run: |
           make -C host
-          host/json_test
+          make -C host test

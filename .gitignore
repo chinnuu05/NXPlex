@@ -18,6 +18,8 @@ host/avtest
 host/apptest
 host/episodetest
 host/json_test
+host/jpeg_test
+host/blocklinear_test
 host/third_party/
 
 # never commit these: logs contain your server details, media is yours

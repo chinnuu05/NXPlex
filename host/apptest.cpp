@@ -160,6 +160,13 @@ int main(int argc, char** argv) {
     NxpStatus s4 = status();
     CHECK(video.h == 288 && s4.position_ms + 1500 >= before_q, "now %dx%d, position %u (was %u)", video.w, video.h,
           s4.position_ms, before_q);
+    // 480p (the new top quality): 852x480, or narrower for 4:3 shows
+    app.cmd_set_quality(4);
+    CHECK(wait_for("480p restart", 15000,
+                   [](const NxpStatus& s) { return s.play_state == NxpPlay_Playing && s.quality == 4; }),
+          "quality 480p");
+    sleep_ms(2500);
+    CHECK(video.h == 480 && video.shown > 0, "480p frames: %dx%d", video.w, video.h);
     app.cmd_set_quality(1);
     app.cmd_set_volume(70);
     CHECK(volume_seen == 70, "volume hook");

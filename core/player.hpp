@@ -35,8 +35,12 @@ struct AudioSink {
     virtual ~AudioSink() = default;
 };
 
+// Frames are decoded straight into the sink's memory (RGB565, row stride = w)
+// so there is only one copy of each frame: begin_frame() hands out the buffer
+// (or nullptr to skip the frame), end_frame() is always called afterwards.
 struct VideoSink {
-    virtual void present(const uint8_t* rgba, int w, int h, int64_t pts_ms) = 0;
+    virtual uint16_t* begin_frame(int w, int h) = 0;
+    virtual void end_frame(bool ok, int64_t pts_ms) = 0;
     virtual ~VideoSink() = default;
 };
 
@@ -115,7 +119,6 @@ private:
     uint64_t paused_at_ms_ = 0, paused_total_ms_ = 0;
     bool first_frame_shown_ = false;
 
-    std::vector<uint8_t> rgba_;
     PlayerStats stats_;
     uint64_t decode_us_total_ = 0;
 };

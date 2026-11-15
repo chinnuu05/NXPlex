@@ -292,10 +292,13 @@ int Player::video_tick() {
         queue_bytes_ -= pkt.data.size();
         cv_.notify_all();
     }
-    uint64_t t0 = now_us();
     int w = 0, h = 0;
-    bool ok = jpeg_decode_rgba(pkt.data.data(), pkt.data.size(), rgba_, w, h);
+    bool ok = jpeg_size(pkt.data.data(), pkt.data.size(), w, h) && w <= 4096 && h <= 4096;
+    uint16_t* buf = ok ? video_.begin_frame(w, h) : nullptr;
+    uint64_t t0 = now_us();
+    ok = buf && jpeg_decode_rgb565(pkt.data.data(), pkt.data.size(), buf, w);
     uint32_t us = (uint32_t)(now_us() - t0);
+    if (buf) video_.end_frame(ok, pkt.pts_ms);  // may wait for vsync: keep it outside the lock
     {
         std::lock_guard<std::mutex> lk(mu_);
         if (!ok) {
@@ -307,7 +310,6 @@ int Player::video_tick() {
         decode_us_total_ += us;
         if (us > stats_.max_decode_us) stats_.max_decode_us = us;
     }
-    video_.present(rgba_.data(), w, h, pkt.pts_ms);  // may wait for vsync: keep it outside the lock
     return 0;
 }
 

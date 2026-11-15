@@ -6,8 +6,20 @@
 
 namespace nxp {
 
-// Decodes one JPEG frame to RGBA8888 (alpha = 255). Reuses `out`.
+// Reads a JPEG's dimensions without decoding it.
+bool jpeg_size(const uint8_t* data, size_t size, int& w, int& h);
+
+// Decodes a JPEG straight to RGB565 rows (`stride_px` pixels apart) without a
+// full-size RGB intermediate: only stb's YCbCr planes (~1.5 bytes/pixel) are
+// allocated while decoding. Grayscale and YCbCr/RGB JPEGs; not CMYK.
+bool jpeg_decode_rgb565(const uint8_t* data, size_t size, uint16_t* out, int stride_px);
+
+// Reference decoder: one JPEG to RGBA8888 (alpha = 255). Used by tests.
 bool jpeg_decode_rgba(const uint8_t* data, size_t size, std::vector<uint8_t>& out, int& w, int& h);
+
+inline uint16_t rgb565(uint8_t r, uint8_t g, uint8_t b) {
+    return (uint16_t)(((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3));
+}
 
 class Mp3Decoder {
 public:

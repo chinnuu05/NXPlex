@@ -13,6 +13,7 @@
 #include <switch.h>
 
 #include <strings.h>
+#include <malloc.h>
 #include <sys/stat.h>
 
 #include <atomic>
@@ -220,7 +221,20 @@ static void display_thread(void*) {
         g_display.tick_osd();
         loops++;
         if (now_ms() - loops_since >= 30000) {
-            if (want) logf("display loop: %llu iterations in 30 s", (unsigned long long)loops);
+            if (want) {
+                // Memory headroom at the current quality: our heap, and the
+                // system pool we share with Tesla and other sysmodules.
+                struct mallinfo mi = mallinfo();
+                u64 pool_total = 0, pool_used = 0;
+                svcGetSystemInfo(&pool_total, SystemInfoType_TotalPhysicalMemorySize, INVALID_HANDLE,
+                                 PhysicalMemorySystemInfo_System);
+                svcGetSystemInfo(&pool_used, SystemInfoType_UsedPhysicalMemorySize, INVALID_HANDLE,
+                                 PhysicalMemorySystemInfo_System);
+                logf("display loop: %llu iterations in 30 s; heap in use %u KB of %u KB (peak %u KB); "
+                     "system pool free %llu KB",
+                     (unsigned long long)loops, (unsigned)(mi.uordblks / 1024), HEAP_SIZE / 1024,
+                     (unsigned)(mi.arena / 1024), (unsigned long long)((pool_total - pool_used) / 1024));
+            }
             loops = 0;
             loops_since = now_ms();
         }

@@ -60,9 +60,15 @@ public:
     int shown = 0;
     double sum_abs_err = 0, max_err = 0;
     int w = 0, h = 0;
-    void present(const uint8_t* rgba, int fw, int fh, int64_t pts) override {
+    std::vector<uint16_t> frame;  // RGB565, decoded in place like on the Switch
+    uint16_t* begin_frame(int fw, int fh) override {
         w = fw;
         h = fh;
+        frame.resize((size_t)fw * fh);
+        return frame.data();
+    }
+    void end_frame(bool ok, int64_t pts) override {
+        if (!ok) return;
         double err = player ? (double)(player->position_ms() - pts) : 0.0;  // >0 = shown late
         sum_abs_err += std::fabs(err);
         if (std::fabs(err) > std::fabs(max_err)) max_err = err;
@@ -71,8 +77,11 @@ public:
             snprintf(path, sizeof(path), "%s/frame_%04d.ppm", outdir.c_str(), shown);
             FILE* f = fopen(path, "wb");
             if (f) {
-                fprintf(f, "P6\n%d %d\n255\n", fw, fh);
-                for (int i = 0; i < fw * fh; i++) fwrite(rgba + i * 4, 1, 3, f);
+                fprintf(f, "P6\n%d %d\n255\n", w, h);
+                for (uint16_t p : frame) {
+                    uint8_t rgb[3] = {(uint8_t)((p >> 8) & 0xF8), (uint8_t)((p >> 3) & 0xFC), (uint8_t)(p << 3)};
+                    fwrite(rgb, 1, 3, f);
+                }
                 fclose(f);
             }
         }

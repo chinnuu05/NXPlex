@@ -10,8 +10,11 @@ namespace nxp {
 
 namespace {
 
-const char* kResolution[3] = {"256x144", "384x216", "512x288"};
-const int kMaxBitrate[3] = {1000, 2000, 3000};
+// 144p ... 480p. Plex returns 852x480 for the last one; 4:3 sources come
+// back narrower (e.g. 640x480).
+const int kQualities = 5;
+const char* kResolution[kQualities] = {"256x144", "384x216", "512x288", "640x360", "854x480"};
+const int kMaxBitrate[kQualities] = {1000, 2000, 3000, 4000, 6000};
 
 // Plex transcodes anything to this (see README "How it works").
 const char* kProfileExtra =
@@ -95,7 +98,7 @@ App::App(Config& cfg, const PlexClient& client, AudioSink& audio, VideoSink& vid
     volume_ = clampi(atoi(cfg_.get("volume", "100").c_str()), 0, 100);
     corner_ = clampi(atoi(cfg_.get("pip_corner", "0").c_str()), 0, 3);
     size_ = clampi(atoi(cfg_.get("pip_size", "1").c_str()), 0, 4);
-    quality_ = clampi(atoi(cfg_.get("quality", "1").c_str()), 0, 2);
+    quality_ = clampi(atoi(cfg_.get("quality", "1").c_str()), 0, kQualities - 1);
     autoplay_ = cfg_.get("autoplay", "1") != "0";
 }
 
@@ -412,7 +415,7 @@ void App::cmd_set_quality(int q) {
     bool restart;
     {
         std::lock_guard<std::mutex> lk(state_mu_);
-        q = clampi(q, 0, 2);
+        q = clampi(q, 0, kQualities - 1);
         if (q == quality_) return;
         quality_ = q;
         cfg_dirty_ = true;

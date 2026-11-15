@@ -214,7 +214,7 @@ static std::string fmt_time(u32 ms) {
 
 static const char* kCorners[4] = {"Top right", "Top left", "Bottom left", "Bottom right"};
 static const char* kSizes[5] = {"Small", "Medium", "Large", "Extra large", "Huge"};
-static const char* kQualities[3] = {"144p", "216p", "288p"};
+static const char* kQualities[5] = {"144p", "216p", "288p", "360p", "480p"};
 
 // Set by a browse screen after starting playback; every browse screen pops
 // itself on its next update until we're back at the main screen.
@@ -588,7 +588,7 @@ private:
             add("Libraries", "", [] { tsl::changeTo<GuiBrowse>("/library/sections", "Libraries"); });
             list_->addItem(new tsl::elm::CategoryHeader("Settings"));
             quality_ = add("Video quality", "", [] {
-                remote::cmd_in<u32>(NxpCmd_SetQuality, (u32)((remote::g_status.quality + 1) % 3));
+                remote::cmd_in<u32>(NxpCmd_SetQuality, (u32)((remote::g_status.quality + 1) % 5));
             });
             autoplay_ = add("Autoplay next episode", "", [] {
                 remote::cmd_in<u32>(NxpCmd_SetAutoplay, remote::g_status.autoplay ? 0u : 1u);
@@ -699,7 +699,7 @@ private:
         if (volume_ && pending_volume_ < 0 && getFocusedElement() != volume_) volume_->setProgress(st.volume);
         if (corner_) corner_->setValue(kCorners[st.corner & 3]);
         if (size_) size_->setValue(kSizes[st.size % 5]);
-        if (quality_) quality_->setValue(kQualities[st.quality % 3]);
+        if (quality_) quality_->setValue(kQualities[st.quality % 5]);
         if (autoplay_) autoplay_->setValue(st.autoplay ? "On" : "Off");
         if (server_) server_->setValue(st.server_name);
         if (account_ && !signout_armed_) account_->setValue(st.account);

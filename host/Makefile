@@ -12,7 +12,7 @@ LIBS     := $(MBED)/library/libmbedtls.a $(MBED)/library/libmbedx509.a $(MBED)/l
 CORE_SRC := $(wildcard ../core/*.cpp)
 CORE_OBJ := $(patsubst ../core/%.cpp,build/core/%.o,$(CORE_SRC))
 
-all: nxplex-cli json_test avtest apptest episodetest
+all: nxplex-cli json_test jpeg_test blocklinear_test avtest apptest episodetest
 
 $(MBED)/include/mbedtls/ssl.h:
 	../tools/fetch-mbedtls.sh
@@ -36,13 +36,21 @@ apptest: apptest.cpp sim.hpp $(CORE_OBJ) $(LIBS)
 episodetest: episodetest.cpp sim.hpp $(CORE_OBJ) $(LIBS)
 	$(CXX) $(CXXFLAGS) $(INC) episodetest.cpp $(CORE_OBJ) $(LIBS) -lpthread -o $@
 
+jpeg_test: tests/jpeg_test.cpp tests/odd420_jpeg.inc build/core/decoders.o
+	$(CXX) $(CXXFLAGS) $(INC) -Itests tests/jpeg_test.cpp build/core/decoders.o -o $@
+
+blocklinear_test: tests/blocklinear_test.cpp ../core/blocklinear.hpp
+	$(CXX) $(CXXFLAGS) $(INC) tests/blocklinear_test.cpp -o $@
+
 json_test: tests/json_test.cpp build/core/json.o
 	$(CXX) $(CXXFLAGS) $(INC) $^ -o $@
 
-test: json_test
+test: json_test jpeg_test blocklinear_test
 	./json_test
+	./jpeg_test
+	./blocklinear_test
 
 clean:
-	rm -rf build nxplex-cli json_test avtest apptest episodetest
+	rm -rf build nxplex-cli json_test jpeg_test blocklinear_test avtest apptest episodetest
 
 .PHONY: all test clean

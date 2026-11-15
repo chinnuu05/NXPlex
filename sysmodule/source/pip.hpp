@@ -7,6 +7,7 @@
 #include <mutex>
 #include <vector>
 
+#include "blocklinear.hpp"
 #include "nxplex_ipc.h"
 #include "platform.hpp"
 #include "player.hpp"
@@ -56,23 +57,32 @@ public:
         apply_rect_locked();
     }
 
-    void present(const uint8_t* rgba, int w, int h, int64_t) override {
-        std::lock_guard<std::mutex> lk(mu_);
-        // Keep the frame (RGB565) for redraws while paused / after Tesla closes.
-        last_.resize((size_t)w * h);
-        for (size_t i = 0, n = (size_t)w * h; i < n; i++) {
-            const uint8_t* p = rgba + i * 4;
-            last_[i] = (uint16_t)(((p[0] & 0xF8) << 8) | ((p[1] & 0xFC) << 3) | (p[2] >> 3));
+    // The player decodes straight into last_ (the only full copy of the
+    // frame; it's also what we redraw from while paused / after Tesla closes
+    // and what the overlay preview reads). The lock is held from begin to end.
+    uint16_t* begin_frame(int w, int h) override {
+        mu_.lock();
+        if (w != last_w_ || h != last_h_) {
+            last_.clear();
+            last_.shrink_to_fit();  // don't keep a big buffer around after a quality drop
+            last_.resize((size_t)w * h);
+            last_w_ = w;
+            last_h_ = h;
         }
-        last_w_ = w;
-        last_h_ = h;
-        frame_seq_++;
-        if (!window_ok_) return;
-        if (w != fb_w_ || h != fb_h_) {
-            if (!make_fb_locked(w, h)) return;
-            apply_rect_locked();  // aspect ratio may have changed
+        return last_.data();
+    }
+
+    void end_frame(bool ok, int64_t) override {
+        if (ok) {
+            frame_seq_++;
+            if (window_ok_) {
+                if (last_w_ != fb_w_ || last_h_ != fb_h_) {
+                    if (make_fb_locked(last_w_, last_h_)) apply_rect_locked();  // aspect may have changed
+                }
+                draw_locked();
+            }
         }
-        draw_locked();
+        mu_.unlock();
     }
 
     // Copies the latest frame for the overlay's preview. Pixels are only
@@ -81,16 +91,35 @@ public:
         std::lock_guard<std::mutex> lk(mu_);
         if (size < sizeof(NxpFrameHeader)) return 0;
         NxpFrameHeader hdr = {};
-        size_t px = (size_t)last_w_ * last_h_ * 2;
-        bool fits = !last_.empty() && last_w_ <= NXP_FRAME_MAX_W && last_h_ <= NXP_FRAME_MAX_H &&
-                    sizeof(hdr) + px <= size;
+        // Fit within NXP_FRAME_MAX_W x _H (nearest neighbour; the preview is small anyway).
+        int w = last_w_, h = last_h_;
+        if (w > NXP_FRAME_MAX_W || h > NXP_FRAME_MAX_H) {
+            if (w * NXP_FRAME_MAX_H > h * NXP_FRAME_MAX_W) {
+                h = h * NXP_FRAME_MAX_W / w;
+                w = NXP_FRAME_MAX_W;
+            } else {
+                w = w * NXP_FRAME_MAX_H / h;
+                h = NXP_FRAME_MAX_H;
+            }
+        }
+        size_t px = (size_t)w * h * 2;
+        bool fits = !last_.empty() && w > 0 && h > 0 && sizeof(hdr) + px <= size;
         hdr.seq = fits ? frame_seq_ : 0;
-        hdr.width = (uint16_t)last_w_;
-        hdr.height = (uint16_t)last_h_;
+        hdr.width = (uint16_t)w;
+        hdr.height = (uint16_t)h;
         hdr.has_pixels = fits && frame_seq_ != have_seq;
         memcpy(out, &hdr, sizeof(hdr));
-        if (hdr.has_pixels) memcpy((uint8_t*)out + sizeof(hdr), last_.data(), px);
-        return sizeof(hdr) + (hdr.has_pixels ? px : 0);
+        if (!hdr.has_pixels) return sizeof(hdr);
+        uint16_t* dst = (uint16_t*)((uint8_t*)out + sizeof(hdr));
+        if (w == last_w_ && h == last_h_) {
+            memcpy(dst, last_.data(), px);
+        } else {
+            for (int y = 0; y < h; y++) {
+                const uint16_t* src = last_.data() + (size_t)(y * last_h_ / h) * last_w_;
+                for (int x = 0; x < w; x++) dst[(size_t)y * w + x] = src[x * last_w_ / w];
+            }
+        }
+        return sizeof(hdr) + px;
     }
 
     // OSD state, drawn over the video.
@@ -188,8 +217,9 @@ private:
     bool make_fb_locked(int w, int h) {
         if (fb_ok_) framebufferClose(&fb_);
         fb_ok_ = false;
+        // No framebufferMakeLinear(): we write the block-linear layout
+        // ourselves (draw_locked), which saves a full frame of memory.
         Result rc = framebufferCreate(&fb_, &window_, (u32)w, (u32)h, PIXEL_FORMAT_RGB_565, 2);
-        if (R_SUCCEEDED(rc)) rc = framebufferMakeLinear(&fb_);
         if (R_FAILED(rc)) {
             logf("display: framebuffer %dx%d failed 0x%x", w, h, rc);
             return false;
@@ -224,13 +254,18 @@ private:
         if (!fb_ok_ || last_.empty() || last_w_ != fb_w_ || last_h_ != fb_h_) return;
         u32 stride = 0;
         uint8_t* dst = (uint8_t*)framebufferBegin(&fb_, &stride);
-        for (int y = 0; y < fb_h_; y++)
-            memcpy(dst + (size_t)y * stride, last_.data() + (size_t)y * fb_w_, (size_t)fb_w_ * 2);
-        auto rect = [&](int x0, int y0, int x1, int y1, uint16_t c) {
-            for (int y = y0 < 0 ? 0 : y0; y < y1 && y < fb_h_; y++) {
-                uint16_t* row = (uint16_t*)(dst + (size_t)y * stride);
-                for (int x = x0 < 0 ? 0 : x0; x < x1 && x < fb_w_; x++) row[x] = c;
+        const uint32_t wb = stride >> 6, row_bytes = (uint32_t)fb_w_ * 2;
+        for (int y = 0; y < fb_h_; y++) {
+            const uint8_t* src = (const uint8_t*)(last_.data() + (size_t)y * fb_w_);
+            for (uint32_t xb = 0; xb < row_bytes; xb += 16) {  // 16 contiguous bytes = 8 pixels
+                uint32_t n = row_bytes - xb < 16 ? row_bytes - xb : 16;
+                memcpy(dst + bl_offset(xb, (uint32_t)y, wb), src + xb, n);
             }
+        }
+        auto rect = [&](int x0, int y0, int x1, int y1, uint16_t c) {
+            for (int y = y0 < 0 ? 0 : y0; y < y1 && y < fb_h_; y++)
+                for (int x = x0 < 0 ? 0 : x0; x < x1 && x < fb_w_; x++)
+                    *(uint16_t*)(dst + bl_offset((uint32_t)x * 2, (uint32_t)y, wb)) = c;
         };
         const uint16_t kGrey = 0x4208, kWhite = 0xFFFF, kAmber = 0xE501;  // Plex amber #E5A00D
         uint64_t now = now_ms();
@@ -251,7 +286,7 @@ private:
             rect(cx - 2 * bw, cy - bh / 2, cx - bw / 2, cy + bh / 2, kWhite);
             rect(cx + bw / 2, cy - bh / 2, cx + 2 * bw, cy + bh / 2, kWhite);
         }
-        framebufferEnd(&fb_);
+        framebufferEnd(&fb_);  // flushes the data cache and queues the buffer
     }
 
     std::mutex mu_;

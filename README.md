@@ -12,7 +12,7 @@ keeps the controller; you control playback from the Tesla overlay menu.
 - **Autoplay**: when an episode ends, the next one starts (next season too); can be turned off
 - **Next episode** button while watching a show
 - Position slider with a live preview to jump anywhere, plus pause, skip ±10/30 s, volume,
-  window corner, five window sizes (small to two-thirds of the screen) and video quality (144p/216p/288p)
+  window corner, five window sizes (small to two-thirds of the screen) and video quality (144p up to 480p)
 - Keeps playing while you open Tesla or other overlays
 - Optional controller shortcuts so you don't even need to open the menu
 
@@ -91,8 +91,12 @@ video anyway); `/start` answers HTTP 400 unless `/decision` was called first
 for the same session.
 
 On the Switch, the **sysmodule** (`sysmodule/`) streams over HTTPS (mbedTLS),
-demuxes MKV, decodes JPEG (stb_image) and MP3 (minimp3), draws frames on its
-own vi layer and plays audio through `audout`, mixed with the game. Audio is
+demuxes MKV, decodes JPEG (stb_image, NEON) and MP3 (minimp3), draws frames on
+its own vi layer and plays audio through `audout`, mixed with the game. Each
+frame exists once in memory: JPEGs are decoded straight to RGB565 rows (only
+stb's YCbCr planes as scratch) into the buffer the display redraws from, and
+that is copied directly into the block-linear framebuffer, about 6 bytes per
+pixel in total, which is what lets 480p fit in the module's 6 MB heap. Audio is
 the master clock. The **overlay** (`overlay/`, libtesla) is a thin remote that
 talks to the sysmodule over a named port (`common/nxplex_ipc.h`).
 
@@ -109,7 +113,7 @@ so the streaming code is tested end to end on a PC against a real server
   Tesla's state from its combo (read from `config/tesla/config.ini`), B/A on the
   Tesla menu, and the NXPlex overlay itself. If it ever gets out of sync, press
   the Tesla combo twice. Transitions are logged as `tesla: ... -> ...`.
-- Low resolution by design (up to 288p): it's a corner window.
+- Up to 480p: frames are decoded in software on the CPU core games leave free.
 - No subtitles yet, no music libraries yet, first audio track only.
 - Titles in scripts the Switch's system font lacks may not render in Tesla.
 
@@ -143,7 +147,7 @@ DEVKITA64=~/.local/share/nxplex-toolchain/devkitA64 make dist
 
 ```sh
 make host                   # downloads mbedTLS 2.28.10 on first run
-host/json_test              # unit tests
+make -C host test            # unit tests (JSON, JPEG decoder, block-linear layout)
 host/nxplex-cli login       # sign in (stored in ~/.config/nxplex/nxplex.ini)
 host/nxplex-cli servers && host/nxplex-cli use 1
 host/apptest                # end-to-end: browse, stream, seek, pause, quality, resume point
