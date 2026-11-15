@@ -130,6 +130,14 @@ int main(int argc, char** argv) {
     CHECK(s2.position_ms >= want - 1500 && s2.position_ms <= want + 6000, "position after +60 s: %u (expected ~%lld+)",
           s2.position_ms, (long long)want);
 
+    // ---- absolute seek past the end is clamped (slider at 100%)
+    app.cmd_seek_absolute(s1.duration_ms + 60000);
+    CHECK(status().position_ms + 5000 <= s1.duration_ms + 100, "seek to the end clamps to %u of %u",
+          status().position_ms, s1.duration_ms);
+    app.cmd_seek_absolute(s2.position_ms);  // back to where we were
+    wait_for("seek back", 15000, [](const NxpStatus& s) { return s.play_state == NxpPlay_Playing; });
+    sleep_ms(1500);
+
     // ---- pause
     app.cmd_set_paused(1);
     sleep_ms(500);

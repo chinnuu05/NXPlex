@@ -361,6 +361,9 @@ void App::cmd_seek_absolute(uint32_t ms) {
     {
         std::lock_guard<std::mutex> lk(state_mu_);
         if (play_state_ == NxpPlay_Stopped) return;
+        // Not past the last 5 s: a seek to the very end would just finish
+        // (and autoplay the next episode).
+        if (duration_ms_ && ms + 5000 > duration_ms_) ms = duration_ms_ > 5000 ? duration_ms_ - 5000 : 0;
         pending_seek_ms_ = ms;
     }
     queue(Job::Seek);

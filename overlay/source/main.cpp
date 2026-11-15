@@ -388,6 +388,12 @@ public:
         bool episode = remote::g_have_status && remote::g_status.is_episode;
         if (shape != shape_ || (shape == Shape::Playing && episode != built_episode_)) build(shape);
         refresh();
+        if (pending_seek_pct_ >= 0 && remote::now_ms() >= seek_send_at_) {
+            u32 dur = remote::g_status.duration_ms;
+            if (dur) remote::cmd_in<u32>(NxpCmd_SeekAbsolute, (u32)((u64)dur * (u32)pending_seek_pct_ / 100));
+            pending_seek_pct_ = -1;
+            seek_hold_until_ = remote::now_ms() + 3000;  // let the restart settle before following status again
+        }
         if (pending_volume_ >= 0 && remote::now_ms() >= volume_send_at_) {
             remote::cmd_in<u32>(NxpCmd_SetVolume, (u32)pending_volume_);
             pending_volume_ = -1;
@@ -423,11 +429,13 @@ private:
         removeFocus();
         list_->clear();
         status_ = title_ = sub_ = pause_ = corner_ = size_ = quality_ = account_ = server_ = autoplay_ = nullptr;
-        volume_ = nullptr;
+        volume_ = seek_ = nullptr;
+        pos_header_ = nullptr;
+        pending_seek_pct_ = -1;
+        pos_text_.clear();
         signout_armed_ = false;
         status_text_.clear();
         last_title_.clear();
-        last_pos_.clear();
         pause_text_.clear();
         const NxpStatus& st = remote::g_status;
 
@@ -462,6 +470,17 @@ private:
             list_->addItem(new tsl::elm::CategoryHeader("Now playing  (video reappears when Tesla closes)"));
             title_ = add(st.title, "", nullptr);
             sub_ = add(st.subtitle, "", nullptr);
+            // Position slider: hold Left/Right (or drag on the touchscreen);
+            // the seek is sent once it stops moving.
+            pos_header_ = new tsl::elm::CategoryHeader("Position");
+            list_->addItem(pos_header_);
+            seek_ = new tsl::elm::TrackBar("\u25B6");
+            seek_->setProgress(st.duration_ms ? (u8)((u64)st.position_ms * 100 / st.duration_ms) : 0);
+            seek_->setValueChangedListener([this](u8 v) {
+                pending_seek_pct_ = v;
+                seek_send_at_ = remote::now_ms() + 500;
+            });
+            list_->addItem(seek_);
             pause_ = add("Pause", "", [] { remote::cmd_in<u32>(NxpCmd_SetPaused, 2); });
             add("Back 10 seconds", "", [] { remote::cmd_in<s32>(NxpCmd_SeekRelative, -10000); });
             add("Forward 30 seconds", "", [] { remote::cmd_in<s32>(NxpCmd_SeekRelative, 30000); });
@@ -533,13 +552,21 @@ private:
             title_->setText(st.title);
             sub_->setText(st.subtitle);
         }
-        if (sub_) {
-            std::string v = fmt_time(st.position_ms) + " / " + fmt_time(st.duration_ms);
-            if (v != last_pos_) {
-                last_pos_ = v;
-                sub_->setValue(v, true);
+        if (pos_header_) {
+            std::string v;
+            if (pending_seek_pct_ >= 0)
+                v = "Jump to " + fmt_time((u32)((u64)st.duration_ms * (u32)pending_seek_pct_ / 100)) + " / " +
+                    fmt_time(st.duration_ms);
+            else
+                v = std::string(st.play_state == NxpPlay_Loading ? "Loading  " : "Position  ") +
+                    fmt_time(st.position_ms) + " / " + fmt_time(st.duration_ms);
+            if (v != pos_text_) {
+                pos_text_ = v;
+                pos_header_->setText(v);
             }
         }
+        if (seek_ && pending_seek_pct_ < 0 && remote::now_ms() >= seek_hold_until_ && st.duration_ms)
+            seek_->setProgress((u8)((u64)st.position_ms * 100 / st.duration_ms));
         if (pause_) {
             const char* t = st.play_state == NxpPlay_Paused ? "Resume" : "Pause";
             if (pause_text_ != t) {
@@ -563,7 +590,12 @@ private:
                        *server_ = nullptr, *autoplay_ = nullptr;
     bool built_episode_ = false;
     tsl::elm::TrackBar* volume_ = nullptr;
-    std::string status_text_, last_title_, last_pos_, pause_text_;
+    tsl::elm::TrackBar* seek_ = nullptr;
+    tsl::elm::CategoryHeader* pos_header_ = nullptr;
+    int pending_seek_pct_ = -1;
+    u64 seek_send_at_ = 0, seek_hold_until_ = 0;
+    std::string pos_text_;
+    std::string status_text_, last_title_, pause_text_;
     int pending_volume_ = -1;
     u64 volume_send_at_ = 0;
     bool signout_armed_ = false;

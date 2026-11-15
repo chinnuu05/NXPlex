@@ -11,7 +11,7 @@ keeps the controller; you control playback from the Tesla overlay menu.
 - Resume points and watched state sync with your other Plex apps
 - **Autoplay**: when an episode ends, the next one starts (next season too); can be turned off
 - **Next episode** button while watching a show
-- Pause, skip ±10/30 s, volume, window corner and size, video quality (144p/216p/288p)
+- Position slider to jump anywhere, plus pause, skip ±10/30 s, volume, window corner and size, video quality (144p/216p/288p)
 - Keeps playing while you open Tesla or other overlays
 - Optional controller shortcuts so you don't even need to open the menu
 
@@ -46,7 +46,8 @@ service*), so it doesn't use memory when you're not watching.
    left off), **Y** plays from the beginning.
 5. Close Tesla. The video keeps playing in the corner.
 
-Open Tesla again any time for the **Now playing** controls: pause, skip,
+Open Tesla again any time for the **Now playing** controls: a position
+slider (hold Left/Right or drag; it jumps when you let go), pause, skip,
 next episode, volume, window position and size, stop. *Settings* has video
 quality and *Autoplay next episode* (on by default). While Tesla is open the video
 window steps aside (audio keeps playing) and comes back when Tesla closes;
