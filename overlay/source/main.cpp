@@ -213,7 +213,7 @@ static std::string fmt_time(u32 ms) {
 }
 
 static const char* kCorners[4] = {"Top right", "Top left", "Bottom left", "Bottom right"};
-static const char* kSizes[3] = {"Small", "Medium", "Large"};
+static const char* kSizes[5] = {"Small", "Medium", "Large", "Extra large", "Huge"};
 static const char* kQualities[3] = {"144p", "216p", "288p"};
 
 // Set by a browse screen after starting playback; every browse screen pops
@@ -222,6 +222,45 @@ static bool g_pop_to_main = false;
 static int g_browse_depth = 0;
 
 static bool clicked(u64 keys) { return keys & HidNpadButton_A; }
+
+// ------------------------------------------------------------------ preview + slider
+
+// A TrackBar with the video preview drawn above the bar, as one element: when
+// the slider is selected, Tesla scrolls to it and the picture stays in view.
+class PreviewSeekBar : public tsl::elm::TrackBar {
+public:
+    using PreviewFn = std::function<void(tsl::gfx::Renderer*, s32 x, s32 y, s32 w, s32 h)>;
+    PreviewSeekBar(const char* icon, u16 preview_h, PreviewFn preview)
+        : TrackBar(icon), preview_h_(preview_h), preview_(std::move(preview)) {}
+
+    void layout(u16, u16, u16, u16) override {
+        setBoundaries(getX(), getY(), getWidth(), preview_h_ + tsl::style::TrackBarDefaultHeight);
+    }
+    void draw(tsl::gfx::Renderer* r) override {
+        preview_(r, getX(), getY(), getWidth(), preview_h_);
+        with_bar_bounds([&] { TrackBar::draw(r); });
+    }
+    void drawHighlight(tsl::gfx::Renderer* r) override {
+        with_bar_bounds([&] { TrackBar::drawHighlight(r); });
+    }
+    bool onTouch(tsl::elm::TouchEvent e, s32 cx, s32 cy, s32 px, s32 py, s32 ix, s32 iy) override {
+        bool handled = false;
+        with_bar_bounds([&] { handled = TrackBar::onTouch(e, cx, cy, px, py, ix, iy); });
+        return handled;
+    }
+
+private:
+    // TrackBar draws relative to its own bounds: point them at the bar part.
+    template <typename F>
+    void with_bar_bounds(F f) {
+        s32 x = getX(), y = getY(), w = getWidth(), h = getHeight();
+        setBoundaries(x, y + preview_h_, w, tsl::style::TrackBarDefaultHeight);
+        f();
+        setBoundaries(x, y, w, h);
+    }
+    u16 preview_h_;
+    PreviewFn preview_;
+};
 
 // ------------------------------------------------------------------ servers screen
 
@@ -505,24 +544,23 @@ private:
             add("Choose your Plex server", "", [] { tsl::changeTo<GuiServers>(); });
             break;
         case Shape::Playing:
-            list_->addItem(new tsl::elm::CategoryHeader("Now playing"));
-            list_->addItem(new tsl::elm::CustomDrawer([this](tsl::gfx::Renderer* r, s32 x, s32 y, s32 w, s32 h) {
-                               draw_preview(r, x, y, w, h);
-                           }),
-                           kPreviewHeight);
-            title_ = add(st.title, "", nullptr);
-            sub_ = add(st.subtitle, "", nullptr);
-            // Position slider: hold Left/Right (or drag on the touchscreen);
-            // the seek is sent once it stops moving.
-            pos_header_ = new tsl::elm::CategoryHeader("Position");
+            // The header shows the time; right under it the live preview and
+            // the position slider, as one element (hold Left/Right or drag;
+            // the seek is sent once it stops moving).
+            pos_header_ = new tsl::elm::CategoryHeader("Now playing");
             list_->addItem(pos_header_);
-            seek_ = new tsl::elm::TrackBar("\u25B6");
+            seek_ = new PreviewSeekBar("\u25B6", kPreviewHeight,
+                                       [this](tsl::gfx::Renderer* r, s32 x, s32 y, s32 w, s32 h) {
+                                           draw_preview(r, x, y, w, h);
+                                       });
             seek_->setProgress(st.duration_ms ? (u8)((u64)st.position_ms * 100 / st.duration_ms) : 0);
             seek_->setValueChangedListener([this](u8 v) {
                 pending_seek_pct_ = v;
                 seek_send_at_ = remote::now_ms() + 500;
             });
             list_->addItem(seek_);
+            title_ = add(st.title, "", nullptr);
+            sub_ = add(st.subtitle, "", nullptr);
             pause_ = add("Pause", "", [] { remote::cmd_in<u32>(NxpCmd_SetPaused, 2); });
             add("Back 10 seconds", "", [] { remote::cmd_in<s32>(NxpCmd_SeekRelative, -10000); });
             add("Forward 30 seconds", "", [] { remote::cmd_in<s32>(NxpCmd_SeekRelative, 30000); });
@@ -540,7 +578,7 @@ private:
             });
             size_ = add("Window size", "", [] {
                 const NxpStatus& s = remote::g_status;
-                remote::cmd_in<u32>(NxpCmd_SetLayout, (u32)(s.corner | (((s.size + 1) % 3) << 8)));
+                remote::cmd_in<u32>(NxpCmd_SetLayout, (u32)(s.corner | (((s.size + 1) % 5) << 8)));
             });
             add("Stop", "", [] { remote::cmd(NxpCmd_Stop); });
             [[fallthrough]];
@@ -570,7 +608,7 @@ private:
         restoreFocus();
     }
 
-    static const u16 kPreviewHeight = 220;
+    static const u16 kPreviewHeight = 215;
 
     // Live video inside the menu: scaled (nearest) and converted to Tesla's
     // RGBA4444 once per new frame, then blitted every frame.
@@ -642,7 +680,7 @@ private:
                 v = "Jump to " + fmt_time((u32)((u64)st.duration_ms * (u32)pending_seek_pct_ / 100)) + " / " +
                     fmt_time(st.duration_ms);
             else
-                v = std::string(st.play_state == NxpPlay_Loading ? "Loading  " : "Position  ") +
+                v = std::string(st.play_state == NxpPlay_Loading ? "Loading  " : "Now playing  ") +
                     fmt_time(st.position_ms) + " / " + fmt_time(st.duration_ms);
             if (v != pos_text_) {
                 pos_text_ = v;
@@ -660,7 +698,7 @@ private:
         }
         if (volume_ && pending_volume_ < 0 && getFocusedElement() != volume_) volume_->setProgress(st.volume);
         if (corner_) corner_->setValue(kCorners[st.corner & 3]);
-        if (size_) size_->setValue(kSizes[st.size % 3]);
+        if (size_) size_->setValue(kSizes[st.size % 5]);
         if (quality_) quality_->setValue(kQualities[st.quality % 3]);
         if (autoplay_) autoplay_->setValue(st.autoplay ? "On" : "Off");
         if (server_) server_->setValue(st.server_name);

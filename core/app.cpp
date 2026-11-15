@@ -94,7 +94,7 @@ App::App(Config& cfg, const PlexClient& client, AudioSink& audio, VideoSink& vid
     auth_ = client_.user_token.empty() ? NxpAuth_SignedOut : NxpAuth_SignedIn;
     volume_ = clampi(atoi(cfg_.get("volume", "100").c_str()), 0, 100);
     corner_ = clampi(atoi(cfg_.get("pip_corner", "0").c_str()), 0, 3);
-    size_ = clampi(atoi(cfg_.get("pip_size", "1").c_str()), 0, 2);
+    size_ = clampi(atoi(cfg_.get("pip_size", "1").c_str()), 0, 4);
     quality_ = clampi(atoi(cfg_.get("quality", "1").c_str()), 0, 2);
     autoplay_ = cfg_.get("autoplay", "1") != "0";
 }
@@ -398,7 +398,7 @@ void App::cmd_set_volume(int v) {
 
 void App::cmd_set_layout(int corner, int size) {
     corner = clampi(corner, 0, 3);
-    size = clampi(size, 0, 2);
+    size = clampi(size, 0, 4);
     {
         std::lock_guard<std::mutex> lk(state_mu_);
         corner_ = corner;

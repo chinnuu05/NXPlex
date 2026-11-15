@@ -34,7 +34,7 @@ typedef struct {
     uint8_t servers_state; /* NxpServersState */
     uint8_t volume;        /* 0..100 */
     uint8_t corner;        /* 0=top right 1=top left 2=bottom left 3=bottom right */
-    uint8_t size;          /* 0..2 */
+    uint8_t size;          /* 0..4: small, medium (default), large, extra large, huge */
     uint8_t quality;       /* 0..2 */
     uint8_t has_server;
     uint8_t is_episode;  /* the current item is a TV episode (Next episode applies) */

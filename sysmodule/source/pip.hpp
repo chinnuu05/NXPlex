@@ -19,6 +19,8 @@ namespace nxp {
 
 class PipDisplay : public VideoSink {
 public:
+    static const int kSizes = 5;
+
     // The window exists while playback wants it (open/close) AND Tesla isn't
     // showing (set_hidden). The display hardware only shows one of our layer
     // and Tesla's, so the video steps aside while Tesla is open.
@@ -50,7 +52,7 @@ public:
     void set_layout(int corner, int size) {
         std::lock_guard<std::mutex> lk(mu_);
         corner_ = corner & 3;
-        size_ = size % 3;
+        size_ = size % kSizes;
         apply_rect_locked();
     }
 
@@ -202,7 +204,8 @@ private:
     // keeping its aspect ratio and anchored to the chosen corner.
     void apply_rect_locked() {
         if (!layer_ok_) return;
-        static const int widths[3] = {384, 512, 768};
+        // Small, Medium (default), Large, Extra large, Huge.
+        static const int widths[kSizes] = {384, 512, 768, 1024, 1280};
         int bw = widths[size_], bh = bw * 9 / 16, m = 24;
         int w = bw, h = bh;
         int fw = fb_w_ ? fb_w_ : last_w_, fh = fb_h_ ? fb_h_ : last_h_;

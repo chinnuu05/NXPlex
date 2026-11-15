@@ -11,7 +11,8 @@ keeps the controller; you control playback from the Tesla overlay menu.
 - Resume points and watched state sync with your other Plex apps
 - **Autoplay**: when an episode ends, the next one starts (next season too); can be turned off
 - **Next episode** button while watching a show
-- Position slider to jump anywhere, plus pause, skip ±10/30 s, volume, window corner and size, video quality (144p/216p/288p)
+- Position slider with a live preview to jump anywhere, plus pause, skip ±10/30 s, volume,
+  window corner, five window sizes (small to two-thirds of the screen) and video quality (144p/216p/288p)
 - Keeps playing while you open Tesla or other overlays
 - Optional controller shortcuts so you don't even need to open the menu
 
