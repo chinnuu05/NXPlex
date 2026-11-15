@@ -62,6 +62,7 @@ struct PlexItem {
     std::string title, parent, grandparent;
     std::string key;         // what to browse/play next (absolute path)
     std::string rating_key;
+    std::string parent_rating_key, grandparent_rating_key;  // season / show
     std::string part_key;    // first media part (direct file), leaves only
     std::string container, audio_codec, video_codec;
     uint32_t duration_ms = 0, view_offset_ms = 0;
@@ -81,6 +82,12 @@ struct PlexServerSession {
 };
 bool browse(const PlexClient& c, const PlexServerSession& s, const std::string& path, uint32_t start,
             uint32_t count, PlexPage& page, std::string& err);
+
+// The episode after `cur` (next in its season, else the first episode of
+// the next season; specials only continue within specials). Returns false
+// with an empty err when `cur` is the last one.
+bool next_episode(const PlexClient& c, const PlexServerSession& s, const PlexItem& cur, PlexItem& next,
+                  std::string& err);
 
 // Asks the server whether it can transcode with these universal-transcode
 // query parameters. Must precede /start for the same session, or Plex

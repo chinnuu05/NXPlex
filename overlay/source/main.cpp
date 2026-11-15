@@ -385,7 +385,8 @@ public:
     void update() override {
         remote::poll();
         Shape shape = current_shape();
-        if (shape != shape_) build(shape);
+        bool episode = remote::g_have_status && remote::g_status.is_episode;
+        if (shape != shape_ || (shape == Shape::Playing && episode != built_episode_)) build(shape);
         refresh();
         if (pending_volume_ >= 0 && remote::now_ms() >= volume_send_at_) {
             remote::cmd_in<u32>(NxpCmd_SetVolume, (u32)pending_volume_);
@@ -418,9 +419,10 @@ private:
 
     void build(Shape shape) {
         shape_ = shape;
+        built_episode_ = remote::g_have_status && remote::g_status.is_episode;
         removeFocus();
         list_->clear();
-        status_ = title_ = sub_ = pause_ = corner_ = size_ = quality_ = account_ = server_ = nullptr;
+        status_ = title_ = sub_ = pause_ = corner_ = size_ = quality_ = account_ = server_ = autoplay_ = nullptr;
         volume_ = nullptr;
         signout_armed_ = false;
         status_text_.clear();
@@ -463,6 +465,7 @@ private:
             pause_ = add("Pause", "", [] { remote::cmd_in<u32>(NxpCmd_SetPaused, 2); });
             add("Back 10 seconds", "", [] { remote::cmd_in<s32>(NxpCmd_SeekRelative, -10000); });
             add("Forward 30 seconds", "", [] { remote::cmd_in<s32>(NxpCmd_SeekRelative, 30000); });
+            if (built_episode_) add("Next episode", "", [] { remote::cmd(NxpCmd_NextEpisode); });
             volume_ = new tsl::elm::TrackBar("");
             volume_->setProgress(st.volume);
             volume_->setValueChangedListener([this](u8 v) {
@@ -487,6 +490,9 @@ private:
             list_->addItem(new tsl::elm::CategoryHeader("Settings"));
             quality_ = add("Video quality", "", [] {
                 remote::cmd_in<u32>(NxpCmd_SetQuality, (u32)((remote::g_status.quality + 1) % 3));
+            });
+            autoplay_ = add("Autoplay next episode", "", [] {
+                remote::cmd_in<u32>(NxpCmd_SetAutoplay, remote::g_status.autoplay ? 0u : 1u);
             });
             server_ = add("Server", "", [] { tsl::changeTo<GuiServers>(); });
             account_ = add("Account", "", [this] {
@@ -545,6 +551,7 @@ private:
         if (corner_) corner_->setValue(kCorners[st.corner & 3]);
         if (size_) size_->setValue(kSizes[st.size % 3]);
         if (quality_) quality_->setValue(kQualities[st.quality % 3]);
+        if (autoplay_) autoplay_->setValue(st.autoplay ? "On" : "Off");
         if (server_) server_->setValue(st.server_name);
         if (account_ && !signout_armed_) account_->setValue(st.account);
     }
@@ -553,7 +560,8 @@ private:
     Shape shape_ = Shape::Connecting;
     tsl::elm::ListItem *status_ = nullptr, *title_ = nullptr, *sub_ = nullptr, *pause_ = nullptr;
     tsl::elm::ListItem *corner_ = nullptr, *size_ = nullptr, *quality_ = nullptr, *account_ = nullptr,
-                       *server_ = nullptr;
+                       *server_ = nullptr, *autoplay_ = nullptr;
+    bool built_episode_ = false;
     tsl::elm::TrackBar* volume_ = nullptr;
     std::string status_text_, last_title_, last_pos_, pause_text_;
     int pending_volume_ = -1;

@@ -12,7 +12,7 @@ LIBS     := $(MBED)/library/libmbedtls.a $(MBED)/library/libmbedx509.a $(MBED)/l
 CORE_SRC := $(wildcard ../core/*.cpp)
 CORE_OBJ := $(patsubst ../core/%.cpp,build/core/%.o,$(CORE_SRC))
 
-all: nxplex-cli json_test avtest apptest
+all: nxplex-cli json_test avtest apptest episodetest
 
 $(MBED)/include/mbedtls/ssl.h:
 	../tools/fetch-mbedtls.sh
@@ -33,6 +33,9 @@ avtest: avtest.cpp sim.hpp $(CORE_OBJ) $(LIBS)
 apptest: apptest.cpp sim.hpp $(CORE_OBJ) $(LIBS)
 	$(CXX) $(CXXFLAGS) $(INC) apptest.cpp $(CORE_OBJ) $(LIBS) -lpthread -o $@
 
+episodetest: episodetest.cpp sim.hpp $(CORE_OBJ) $(LIBS)
+	$(CXX) $(CXXFLAGS) $(INC) episodetest.cpp $(CORE_OBJ) $(LIBS) -lpthread -o $@
+
 json_test: tests/json_test.cpp build/core/json.o
 	$(CXX) $(CXXFLAGS) $(INC) $^ -o $@
 
@@ -40,6 +43,6 @@ test: json_test
 	./json_test
 
 clean:
-	rm -rf build nxplex-cli json_test avtest apptest
+	rm -rf build nxplex-cli json_test avtest apptest episodetest
 
 .PHONY: all test clean

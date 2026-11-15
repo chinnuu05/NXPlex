@@ -358,6 +358,11 @@ static Result handle(const IpcRequest& r, u8* out, size_t& out_size) {
         if (!in_val(r, u)) return kBad;
         g_ui_event = (int)u;
         return 0;
+    case NxpCmd_NextEpisode: g_app->cmd_next_episode(); return 0;
+    case NxpCmd_SetAutoplay:
+        if (!in_val(r, u)) return kBad;
+        g_app->cmd_set_autoplay(u != 0);
+        return 0;
     case NxpCmd_Quit: g_app->cmd_quit(); return 0;
     }
     return MAKERESULT(Module_Libnx, LibnxError_NotFound);

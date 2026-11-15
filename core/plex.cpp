@@ -257,6 +257,44 @@ HttpRequest server_request(const PlexClient& c, const PlexServerSession& s, cons
     return req;
 }
 
+bool next_episode(const PlexClient& c, const PlexServerSession& s, const PlexItem& cur, PlexItem& next,
+                  std::string& err) {
+    err.clear();
+    if (cur.type != "episode" || cur.parent_rating_key.empty()) return false;
+    // 1. Later episode in the same season.
+    PlexPage season;
+    if (!browse(c, s, "/library/metadata/" + cur.parent_rating_key + "/children", 0, 500, season, err)) return false;
+    const PlexItem* best = nullptr;
+    for (auto& e : season.items) {
+        if (e.type != "episode" || e.rating_key == cur.rating_key || e.index <= cur.index) continue;
+        if (!best || e.index < best->index) best = &e;
+    }
+    if (best) {
+        next = *best;
+        return true;
+    }
+    // 2. First episode of the next season (specials, season 0, don't continue into season 1).
+    if (cur.grandparent_rating_key.empty() || cur.parent_index < 1) return false;
+    PlexPage seasons;
+    if (!browse(c, s, "/library/metadata/" + cur.grandparent_rating_key + "/children", 0, 500, seasons, err))
+        return false;
+    const PlexItem* ns = nullptr;
+    for (auto& z : seasons.items) {
+        if (z.type != "season" || z.index <= cur.parent_index) continue;
+        if (!ns || z.index < ns->index) ns = &z;
+    }
+    if (!ns) return false;
+    PlexPage eps;
+    if (!browse(c, s, ns->key, 0, 500, eps, err)) return false;
+    for (auto& e : eps.items) {
+        if (e.type != "episode") continue;
+        if (!best || e.index < best->index) best = &e;
+    }
+    if (!best) return false;
+    next = *best;
+    return true;
+}
+
 bool transcode_decision(const PlexClient& c, const PlexServerSession& s, const std::string& query, std::string& err) {
     HttpRequest req = server_request(c, s, "/video/:/transcode/universal/decision?" + query);
     req.timeout_ms = 15000;
@@ -332,6 +370,8 @@ bool browse(const PlexClient& c, const PlexServerSession& s, const std::string& 
             else if (key == "grandparentTitle") it.grandparent = val;
             else if (key == "key") it.key = val;
             else if (key == "ratingKey") it.rating_key = val;
+            else if (key == "parentRatingKey") it.parent_rating_key = val;
+            else if (key == "grandparentRatingKey") it.grandparent_rating_key = val;
             else if (key == "duration") it.duration_ms = to_u32(val);
             else if (key == "viewOffset") it.view_offset_ms = to_u32(val);
             else if (key == "leafCount") it.leaf_count = to_u32(val);

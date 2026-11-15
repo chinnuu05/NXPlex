@@ -16,6 +16,7 @@ dist/
 host/nxplex-cli
 host/avtest
 host/apptest
+host/episodetest
 host/json_test
 host/third_party/
 

@@ -96,6 +96,7 @@ App::App(Config& cfg, const PlexClient& client, AudioSink& audio, VideoSink& vid
     corner_ = clampi(atoi(cfg_.get("pip_corner", "0").c_str()), 0, 3);
     size_ = clampi(atoi(cfg_.get("pip_size", "1").c_str()), 0, 2);
     quality_ = clampi(atoi(cfg_.get("quality", "1").c_str()), 0, 2);
+    autoplay_ = cfg_.get("autoplay", "1") != "0";
 }
 
 App::~App() {
@@ -134,6 +135,7 @@ void App::save_config_locked() {
     cfg_.set("pip_corner", std::to_string(corner_));
     cfg_.set("pip_size", std::to_string(size_));
     cfg_.set("quality", std::to_string(quality_));
+    cfg_.set("autoplay", autoplay_ ? "1" : "0");
     if (!cfg_.save()) logf("app: could not save %s", cfg_.path().c_str());
     cfg_dirty_ = false;
 }
@@ -187,6 +189,8 @@ void App::get_status(NxpStatus& o) {
     o.size = (uint8_t)size_;
     o.quality = (uint8_t)quality_;
     o.has_server = cfg_.get("server_url").empty() ? 0 : 1;
+    o.is_episode = item_.type == "episode" ? 1 : 0;
+    o.autoplay = autoplay_ ? 1 : 0;
     o.browse_seq = browse_->seq;
     o.position_ms = pending_seek_ms_ >= 0 ? (uint32_t)pending_seek_ms_ : pos;
     o.duration_ms = duration_ms_;
@@ -364,6 +368,21 @@ void App::cmd_seek_absolute(uint32_t ms) {
 
 void App::cmd_stop() { queue(Job::Stop); }
 
+void App::cmd_next_episode() {
+    {
+        std::lock_guard<std::mutex> lk(state_mu_);
+        if (play_state_ == NxpPlay_Stopped || item_.type != "episode") return;
+        error_.clear();
+    }
+    queue(Job::Next);
+}
+
+void App::cmd_set_autoplay(bool on) {
+    std::lock_guard<std::mutex> lk(state_mu_);
+    autoplay_ = on;
+    cfg_dirty_ = true;
+}
+
 void App::cmd_set_volume(int v) {
     v = clampi(v, 0, 100);
     {
@@ -466,6 +485,7 @@ void App::run_job(Job j) {
     case Job::Seek: job_seek(); break;
     case Job::Stop: job_stop(true, "stopped"); break;
     case Job::Restart: job_restart(); break;
+    case Job::Next: job_next(false); break;
     case Job::None: break;
     }
 }
@@ -551,7 +571,15 @@ void App::periodic() {
             }
         }
         bool near_end = !dur || pos + 15000 >= dur;
-        if (!file && !near_end && restarts_ < 3) {
+        bool autoplay;
+        {
+            std::lock_guard<std::mutex> lk(state_mu_);
+            autoplay = autoplay_ && item_.type == "episode";
+        }
+        if (!file && near_end) mark_watched();
+        if (!file && near_end && autoplay) {
+            job_next(true);
+        } else if (!file && !near_end && restarts_ < 3) {
             restarts_++;
             logf("app: stream ended early at %u ms (%s); reconnecting", pos, perr.empty() ? "no error" : perr.c_str());
             job_restart();
@@ -605,6 +633,21 @@ void App::report_timeline(const char* state) {
     HttpResponse resp;
     http_fetch(req, resp, nullptr);
     if (resp.status != 200) logf("app: timeline %s -> %d %s", state, resp.status, resp.error.c_str());
+}
+
+void App::mark_watched() {
+    std::string rating_key;
+    {
+        std::lock_guard<std::mutex> lk(state_mu_);
+        rating_key = item_.rating_key;
+    }
+    if (rating_key.empty()) return;
+    HttpRequest req =
+        server_request(server_cl_, session(), "/:/scrobble?key=" + rating_key + "&identifier=com.plexapp.plugins.library");
+    req.timeout_ms = 5000;
+    HttpResponse resp;
+    http_fetch(req, resp, nullptr);
+    logf("app: marked watched (%d)", resp.status);
 }
 
 void App::job_servers() {
@@ -937,6 +980,37 @@ void App::job_restart() {
     } else {
         play_state_ = was_paused ? NxpPlay_Paused : NxpPlay_Playing;
     }
+}
+
+void App::job_next(bool finished) {
+    PlexItem cur;
+    {
+        std::lock_guard<std::mutex> lk(state_mu_);
+        cur = item_;
+    }
+    if (cur.type != "episode") return;
+    // Report where we left this one (at the end: Plex marks it watched).
+    report_timeline("stopped");
+    PlexItem next;
+    std::string err;
+    bool found = next_episode(server_cl_, session(), cur, next, err);
+    if (!found) {
+        job_stop(false, finished ? "finished (last episode)" : "no next episode");
+        std::lock_guard<std::mutex> lk(state_mu_);
+        set_error(err.empty() ? (finished ? "" : "That was the last episode") : "Couldn't find the next episode: " + err);
+        return;
+    }
+    logf("app: %s -> next episode S%dE%d", finished ? "autoplay" : "skip", next.parent_index, next.index);
+    {
+        std::lock_guard<std::mutex> lk(state_mu_);
+        play_key_ = next.key;
+        // Like Plex: continue a half-watched episode, otherwise start at 0.
+        play_from_start_ = false;
+        pending_seek_ms_ = -1;
+        play_state_ = NxpPlay_Loading;
+        item_.rating_key.clear();  // job_play must not report the old episode again
+    }
+    job_play();
 }
 
 void App::job_stop(bool report, const char* reason) {

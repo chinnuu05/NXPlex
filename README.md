@@ -9,6 +9,8 @@ keeps the controller; you control playback from the Tesla overlay menu.
 - Sign in with a code at [plex.tv/link](https://plex.tv/link) (no typing passwords on the Switch)
 - *Continue Watching* and full library browsing (movies, shows, seasons, episodes)
 - Resume points and watched state sync with your other Plex apps
+- **Autoplay**: when an episode ends, the next one starts (next season too); can be turned off
+- **Next episode** button while watching a show
 - Pause, skip ±10/30 s, volume, window corner and size, video quality (144p/216p/288p)
 - Keeps playing while you open Tesla or other overlays
 - Optional controller shortcuts so you don't even need to open the menu
@@ -45,7 +47,8 @@ service*), so it doesn't use memory when you're not watching.
 5. Close Tesla. The video keeps playing in the corner.
 
 Open Tesla again any time for the **Now playing** controls: pause, skip,
-volume, window position and size, quality, stop. While Tesla is open the video
+next episode, volume, window position and size, stop. *Settings* has video
+quality and *Autoplay next episode* (on by default). While Tesla is open the video
 window steps aside (audio keeps playing) and comes back when Tesla closes;
 see [Limitations](#limitations).
 
@@ -75,7 +78,10 @@ sends a stream that is trivial to play:
   then `/start`, same query) with `X-Plex-Platform: Generic` and
   `X-Plex-Client-Profile-Extra: add-transcode-target(type=videoProfile&context=streaming&protocol=http&container=mkv&videoCodec=mjpeg&audioCodec=mp3)`.
 - Seeking restarts the transcode at `offset=` (timestamps restart at 0).
-- Progress is reported with `/:/timeline` so resume points sync.
+- Progress is reported with `/:/timeline` so resume points sync; items played
+  to the end are marked watched with `/:/scrobble`.
+- The next episode is the next one in the season, else episode 1 of the next
+  season (specials only continue within specials).
 
 Plex quirks found along the way: unknown `X-Plex-Platform` values are
 rejected; audio-only and baseline-H.264 requests are ignored (you get the full
@@ -137,6 +143,7 @@ host/json_test              # unit tests
 host/nxplex-cli login       # sign in (stored in ~/.config/nxplex/nxplex.ini)
 host/nxplex-cli servers && host/nxplex-cli use 1
 host/apptest                # end-to-end: browse, stream, seek, pause, quality, resume point
+host/episodetest            # Next episode + autoplay (restores watched state afterwards)
 host/avtest file.mkv 10     # play a file through the player with a simulated audio device
 ```
 

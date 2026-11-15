@@ -56,6 +56,8 @@ public:
     void cmd_seek_relative(int32_t delta_ms);
     void cmd_seek_absolute(uint32_t ms);
     void cmd_stop();
+    void cmd_next_episode();
+    void cmd_set_autoplay(bool on);
     void cmd_set_volume(int v);
     void cmd_set_layout(int corner, int size);
     void cmd_set_quality(int q);
@@ -70,7 +72,7 @@ public:
     void wait_idle(uint32_t timeout_ms);
 
 private:
-    enum class Job : uint8_t { None, Servers, SelectServer, Browse, Play, PlayFile, Seek, Stop, Restart };
+    enum class Job : uint8_t { None, Servers, SelectServer, Browse, Play, PlayFile, Seek, Stop, Restart, Next };
 
     static void worker_entry(void* p) { ((App*)p)->worker_loop(); }
     void worker_loop();
@@ -85,10 +87,14 @@ private:
     void job_seek();
     void job_stop(bool report, const char* reason);
     void job_restart();
+    // Stops the current episode and plays the one after it. `finished`: the
+    // current one played to the end (autoplay) rather than being skipped.
+    void job_next(bool finished);
 
     bool open_stream(uint32_t offset_ms, std::string& err);
     void teardown_player();
     void report_timeline(const char* state);
+    void mark_watched();  // the current item played to the end
     uint32_t position_locked();  // needs play_mu_
     void set_error(const std::string& e);
     void queue(Job j);
@@ -136,6 +142,7 @@ private:
     uint32_t duration_ms_ = 0;
     std::string title_, subtitle_, error_;
     int volume_ = 100, corner_ = 0, size_ = 1, quality_ = 1;
+    bool autoplay_ = true;
     bool cfg_dirty_ = false;
     bool end_reported_ = false;
     uint64_t next_timeline_ms_ = 0;

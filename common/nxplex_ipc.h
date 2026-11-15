@@ -11,7 +11,7 @@
 extern "C" {
 #endif
 
-#define NXP_API_VERSION 1
+#define NXP_API_VERSION 2
 #define NXP_PORT_NAME "nxplex"
 #define NXP_SYSMODULE_TID 0x4200000000504C58ULL /* "PLX" */
 
@@ -37,7 +37,9 @@ typedef struct {
     uint8_t size;          /* 0..2 */
     uint8_t quality;       /* 0..2 */
     uint8_t has_server;
-    uint8_t pad[3];
+    uint8_t is_episode;  /* the current item is a TV episode (Next episode applies) */
+    uint8_t autoplay;    /* start the next episode when one finishes */
+    uint8_t pad;
     uint32_t browse_seq;
     uint32_t position_ms;
     uint32_t duration_ms;
@@ -126,6 +128,8 @@ enum NxpCmd {
     NxpCmd_SetQuality = 27,    /* in: u32 0..2 */
     NxpCmd_PlayFile = 28,      /* in buf: path (debug: local MKV) */
     NxpCmd_UiState = 30,       /* in: u32 NxpUi* (overlay shown/hidden/closing) */
+    NxpCmd_NextEpisode = 31,
+    NxpCmd_SetAutoplay = 32,   /* in: u32 0/1 */
 
     NxpCmd_Quit = 50,
 };
