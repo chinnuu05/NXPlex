@@ -1,3 +1,6 @@
+<img width="1280" height="720" alt="botw-naruto-plex" src="https://github.com/user-attachments/assets/916ab8bd-ae5e-4462-91b1-c65f78eeaf62" />
+
+
 # NXPlex
 
 **Watch Plex while you play.** NXPlex is a homebrew Plex client for the
